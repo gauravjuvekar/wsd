@@ -34,7 +34,7 @@ if __name__ == '__main__':
                  "and this is another one".split()]
 
     import pprint
-    print(sentences)
+    print("sentences")
     pprint.pprint(sentences)
     print("SIF embeddings")
     pprint.pprint(sif_embeds(sentences))
