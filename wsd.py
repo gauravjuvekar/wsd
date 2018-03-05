@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 
 import SIF
-import SIF.data_io
-import SIF.SIF_embedding
-import SIF.params
 import sent2vec
 
 import scipy
