@@ -11,6 +11,7 @@ six = "*"
 numpy = "*"
 scipy = "*"
 cython = "*"
+sklearn = "*"
 
 
 [dev-packages]
