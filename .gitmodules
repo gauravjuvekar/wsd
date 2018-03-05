@@ -1,0 +1,9 @@
+[submodule "SIF"]
+	path = SIF
+	url = https://github.com/gauravjuvekar/SIF.git
+[submodule "sent2vec"]
+	path = sent2vec
+	url = https://github.com/gauravjuvekar/sent2vec.git
+[submodule "semcor_reader"]
+	path = semcor_reader
+	url = https://github.com/gauravjuvekar/semcor_reader.git
