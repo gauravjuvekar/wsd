@@ -10,6 +10,7 @@ name = "pypi"
 six = "*"
 numpy = "*"
 scipy = "*"
+cython = "*"
 
 
 [dev-packages]
