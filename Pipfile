@@ -13,6 +13,7 @@ scipy = "*"
 cython = "*"
 sklearn = "*"
 "bs4" = "*"
+nltk = "*"
 
 
 [dev-packages]
