@@ -124,6 +124,10 @@ if __name__ == '__main__':
         semcor_file = './data/datasets/semcor3.0/brownv/tagfiles/br-r01'
         with open(semcor_file, 'rb') as f:
             paras = semcor_reader.readsemcor(f)
+
+        count_correct = 0
+        count_wrong = 0
+        count_skipped = 0
         for para in paras:
             sentences = []
             indices = []
@@ -135,6 +139,7 @@ if __name__ == '__main__':
                         pass
                     elif isinstance(lemma, str):
                         print("No lemma for word %s", word)
+                        count_skipped += 1
                     else:
                         indices.append((s_idx, w_idx, lemma))
                     sent.append(word)
@@ -161,6 +166,11 @@ if __name__ == '__main__':
                 print("Predicted sense:", predicted_lemma.synset().definition())
                 print(detok_sent(replacements[sense_i][0]))
                 print("** ** " * 16)
+                if lemma.synset() == predicted_lemma.synset():
+                    count_correct += 1
+                else:
+                    count_wrong += 1
 
-
-
+        print("Total correct", count_correct)
+        print("Total wrong", count_wrong)
+        print("Total skipped", count_skipped)
