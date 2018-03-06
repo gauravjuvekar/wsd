@@ -64,16 +64,16 @@ def replace_target_word(tok_sent, index):
     for synset, hypernyms in hyp_dict.items():
         if not len(hypernyms):
             for lem in synset.lemmas():
-                lemset.add(lem)
+                lemset.add((lem, synset))
         for hyp in hypernyms:
             for lem in hyp.lemmas():
-                lemset.add(lem)
+                lemset.add((lem, synset))
 
     sent_list = []
-    for lemma in sorted(lemset):
+    for hyp_lemma, synset in sorted(lemset, key=lambda x: x[0]):
         elem_list = [x for y in lemma.name().split("_") for x in y.split()]
         new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
-        sent_list.append((new_sent, lemma))
+        sent_list.append((new_sent, synset))
     return sent_list
 
 
@@ -160,13 +160,12 @@ if __name__ == '__main__':
                 print("Correct sense:", lemma.synset())
                 print("Correct sense:", lemma.synset().definition())
 
-                predicted_lemma = replacements[sense_i][1]
-                print("Predicted sense:", predicted_lemma)
-                print("Predicted sense:", predicted_lemma.synset())
-                print("Predicted sense:", predicted_lemma.synset().definition())
+                predicted_synset = replacements[sense_i][1]
+                print("Predicted sense:", predicted_synset)
+                print("Predicted sense:", predicted_synset.definition())
                 print(detok_sent(replacements[sense_i][0]))
                 print("** ** " * 16)
-                if lemma.synset() == predicted_lemma.synset():
+                if lemma.synset() == predicted_synset:
                     count_correct += 1
                 else:
                     count_wrong += 1
