@@ -150,7 +150,7 @@ if __name__ == '__main__':
                 if sense_i is None:
                     continue
                 pprint.pprint([detok_sent(sent) for sent in orig_sentences])
-                pprint.pprint((s_idx, w_idx, sentences[s_idx][w_idx]))
+                pprint.pprint((s_idx, w_idx, orig_sentences[s_idx][w_idx]))
                 print("Correct sense:", lemma)
                 print("Correct sense:", lemma.synset())
                 print("Correct sense:", lemma.synset().definition())
