@@ -28,7 +28,7 @@ if 's2v' in ENABLE:
     s2v_model.load_model('./data/s2v_wiki_unigrams.bin')
 
 
-def sif_embeds_wrapper(sent_list):
+def sif_embeds(sent_list):
     idx_mat, weight_mat, data = SIF.data_io.prepare_data(sent_list, sif_db)
     params = SIF.params.params()
     params.rmpc = 1
