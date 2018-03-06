@@ -12,6 +12,7 @@ numpy = "*"
 scipy = "*"
 cython = "*"
 sklearn = "*"
+"bs4" = "*"
 
 
 [dev-packages]

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import SIF
 import sent2vec
+import semcor_reader
 
 import scipy
 import scipy.spatial
@@ -12,7 +13,10 @@ wordnet = nltk.wordnet.wordnet
 wordnet.ensure_loaded()
 
 
-ENABLE = ('sif', 's2v')
+ENABLE = (
+    'sif',
+    # 's2v',
+    )
 
 sif_db = SIF.data_io.setup_db('./data/sif.db')
 s2v_model = sent2vec.Sent2vecModel()
@@ -72,10 +76,33 @@ def replace_target_word(tok_sent, index):
     return sent_list
 
 
+def choose_sense(sentences, index_to_replace, replacements,
+                 embed_func, distance_func):
+    # initial_embedding = embed_func(sentences)
+    # orig_sentence = sentences[s_idx]
+    # orig_embed = initial_embedding[s_idx]
+
+    average_dist = []
+    for replacement in replacements:
+        sentences[s_idx] = replacement
+        embed = embed_func(sentences)
+        new_embed = embed[s_idx]
+        pairwise_dist = [distance_func(new_embed, context_embed)
+                         for context_embed in new_embed]
+        # distance with itself will be 0
+        average_dist.append((sum(pairwise_dist) /
+                            (len(pairwise_dist) - 1)))
+
+    min_avg_dist_i = average_dist.index(min(average_dist))
+    return min_avg_dist_i
+
+
+
 if __name__ == '__main__':
     import pprint
-    if True:
-
+    if False:
+        sentences = ["This is a sentence".split(),
+                     "And this is another one".split()]
         print("sentences")
         pprint.pprint(sentences)
         print("SIF embeddings")
@@ -83,11 +110,42 @@ if __name__ == '__main__':
         print("S2V embeddings")
         pprint.pprint(s2v_embeds(sentences))
 
-    if True:
+    if False:
         sentences = ["This is a sentence".split(),
                      "And this is another one".split()]
         index = (1, 3)
 
         sent_list = replace_target_word(sentences[index[0]], index[1])
         orig_sent = sentences[index[0]]
+
+    if True:
+        semcor_file = './data/datasets/semcor3.0/brownv/tagfiles/br-r01'
+        paras = semcor_reader.readsemcor(semcor_file)
+        for para in paras:
+            sentences = []
+            indices = []
+            for s_idx, sentence in enumerate(para):
+                sent = []
+                for w_idx, word_tup in enumerate(sentence):
+                    word, lemma = word_tup
+                    if lemma is None:
+                        pass
+                    elif isinstance(lemma, str):
+                        print("No lemma for word %s", word)
+                    else:
+                        indices.append((s_idx, w_idx))
+                    sent.append(word)
+                sentences.append(sent)
+
+            for s_idx, w_idx in indices:
+                replacements = replace_target_word(sentences[s_idx], w_idx)
+                sense_i = choose_sense(
+                    sentences, s_idx, replacements,
+                    embed_func=sif_embeds,
+                    distance_func=scipy.spatial.distance.minkowski)
+                pprint.pprint(sentences)
+                pprint.pprint(s_idx, sentences[s_idx][w_idx])
+                pprint.pprint(replacements[sense_i])
+
+
 
