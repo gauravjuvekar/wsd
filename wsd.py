@@ -39,22 +39,27 @@ def sif_embeds(sent_list):
     return list(embedding)
 
 
-# def detok_sent(sent):
-    # detokenizer = nltk.tokenize.moses.MosesDetokenizer()
-    # return detokenizer.detokenize(sent, return_str=True)
 
-@functools.lru_cache()
 def detok_sent(sent):
-    return ' '.join(sent)
+    return detok_sent_wrapped(tuple(sent))
+
+@functools.lru_cache()
+def detok_sent_wrapped(sent)
+    detokenizer = nltk.tokenize.moses.MosesDetokenizer()
+    return detokenizer.detokenize(sent, return_str=True)
+
+# @functools.lru_cache()
+# def detok_sent(sent):
+    # return ' '.join(sent)
 
 
 @functools.lru_cache()
-def s2v_embed_wrapper(sent):
+def s2v_embed_wrapped(sent):
     return s2v_model.embed_sentence(sent)
 
 
 def s2v_embeds(sent_list):
-    return [s2v_embed_wrapper(detok_sent(sent)) for sent in sent_list]
+    return [s2v_embed_wrapped(detok_sent(sent)) for sent in sent_list]
 
 
 @functools.lru_cache()
