@@ -44,7 +44,7 @@ def detok_sent(sent):
     return detok_sent_wrapped(tuple(sent))
 
 @functools.lru_cache()
-def detok_sent_wrapped(sent)
+def detok_sent_wrapped(sent):
     detokenizer = nltk.tokenize.moses.MosesDetokenizer()
     return detokenizer.detokenize(sent, return_str=True)
 
