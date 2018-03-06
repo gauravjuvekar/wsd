@@ -120,7 +120,8 @@ if __name__ == '__main__':
 
     if True:
         semcor_file = './data/datasets/semcor3.0/brownv/tagfiles/br-r01'
-        paras = semcor_reader.readsemcor(semcor_file)
+        with open(semcor_file, 'rb') as f:
+            paras = semcor_reader.readsemcor(f)
         for para in paras:
             sentences = []
             indices = []
