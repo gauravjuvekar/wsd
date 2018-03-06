@@ -2,7 +2,6 @@
 import SIF
 import sent2vec
 import semcor_reader
-
 import scipy
 import scipy.spatial
 import scipy.spatial.distance
@@ -62,19 +61,19 @@ def replace_target_word(tok_sent, index):
     # sentences with hypernym replaced for each sense of target token word
     hyp_dict = get_hypernyms(tok_sent[index])
     lemset = set()
-    for elem in hyp_dict:
-        if len(hyp_dict[elem]) == 0: #if no hypernym, replace with the synonym
-            for lem in elem.lemmas():
-                lemset.add(str(lem.name()))
-        for hyp in hyp_dict[elem]:
+    for synset, hypernyms in hyp_dict.items():
+        if not len(hypernyms):
+            for lem in synset.lemmas():
+                lemset.add(lem)
+        for hyp in hypernyms:
             for lem in hyp.lemmas():
-                lemset.add(str(lem.name()))
+                lemset.add(lem)
 
     sent_list = []
-    for elem in sorted(lemset):
-        elem_list = elem.split("_")
+    for lemma in sorted(lemset):
+        elem_list = [x for y in lemma.name().split("_") for x in y.split()]
         new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
-        sent_list.append(new_sent)
+        sent_list.append((new_sent, lemma))
     return sent_list
 
 
@@ -137,23 +136,31 @@ if __name__ == '__main__':
                     elif isinstance(lemma, str):
                         print("No lemma for word %s", word)
                     else:
-                        indices.append((s_idx, w_idx))
+                        indices.append((s_idx, w_idx, lemma))
                     sent.append(word)
                 sentences.append(sent)
-
-            for s_idx, w_idx in indices:
+            orig_sentences  = [[w for w in s] for s in sentences]
+            for s_idx, w_idx, lemma in indices:
                 replacements = replace_target_word(sentences[s_idx], w_idx)
+                replacements_sents = [t[0] for t in replacements]
                 sense_i = choose_sense(
-                    sentences, s_idx, replacements,
+                    sentences, s_idx, replacements_sents,
                     embed_func=sif_embeds,
                     distance_func=scipy.spatial.distance.minkowski)
                 if sense_i is None:
                     continue
-                pprint.pprint([detok_sent(sent) for sent in sentences])
+                pprint.pprint([detok_sent(sent) for sent in orig_sentences])
                 pprint.pprint((s_idx, w_idx, sentences[s_idx][w_idx]))
-                print("Best sense_i:", sense_i)
-                print(detok_sent(replacements[sense_i]))
-                print("*"*80)
+                print("Correct sense:", lemma)
+                print("Correct sense:", lemma.synset())
+                print("Correct sense:", lemma.synset().definition())
+
+                predicted_lemma = replacements[sense_i][1]
+                print("Predicted sense:", predicted_lemma)
+                print("Predicted sense:", predicted_lemma.synset())
+                print("Predicted sense:", predicted_lemma.synset().definition())
+                print(detok_sent(replacements[sense_i][0]))
+                print("** ** " * 16)
 
 
 
