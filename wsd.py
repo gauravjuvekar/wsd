@@ -37,9 +37,12 @@ def sif_embeds(sent_list):
     return list(embedding)
 
 
+# def detok_sent(sent):
+    # detokenizer = nltk.tokenize.moses.MosesDetokenizer()
+    # return detokenizer.detokenize(sent, return_str=True)
+
 def detok_sent(sent):
-    detokenizer = nltk.tokenize.moses.MosesDetokenizer()
-    return detokenizer.detokenize(sent, return_str=True)
+    return ' '.join(sent)
 
 
 def s2v_embeds(sent_list):
