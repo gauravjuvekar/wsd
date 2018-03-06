@@ -10,6 +10,8 @@ import nltk
 import nltk.tokenize
 import nltk.tokenize.moses
 
+import functools
+
 wordnet = nltk.wordnet.wordnet
 wordnet.ensure_loaded()
 
@@ -26,7 +28,7 @@ if 's2v' in ENABLE:
     s2v_model.load_model('./data/s2v_wiki_unigrams.bin')
 
 
-def sif_embeds(sent_list):
+def sif_embeds_wrapper(sent_list):
     idx_mat, weight_mat, data = SIF.data_io.prepare_data(sent_list, sif_db)
     params = SIF.params.params()
     params.rmpc = 1
@@ -41,14 +43,21 @@ def sif_embeds(sent_list):
     # detokenizer = nltk.tokenize.moses.MosesDetokenizer()
     # return detokenizer.detokenize(sent, return_str=True)
 
+@functools.lru_cache()
 def detok_sent(sent):
     return ' '.join(sent)
 
 
+@functools.lru_cache()
+def s2v_embed_wrapper(sent):
+    return s2v_model.embed_sentence(sent)
+
+
 def s2v_embeds(sent_list):
-    return [s2v_model.embed_sentence(detok_sent(sent)) for sent in sent_list]
+    return [s2v_embed_wrapper(detok_sent(sent)) for sent in sent_list]
 
 
+@functools.lru_cache()
 def get_hypernyms(word):
     hyp_dict = {}
     for syn in wordnet.synsets(word):
