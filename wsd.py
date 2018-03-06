@@ -8,6 +8,8 @@ import scipy.spatial
 import scipy.spatial.distance
 
 import nltk
+import nltk.tokenize
+import nltk.tokenize.moses
 
 wordnet = nltk.wordnet.wordnet
 wordnet.ensure_loaded()
@@ -37,7 +39,7 @@ def sif_embeds(sent_list):
 
 
 def detok_sent(sent):
-    detokenizer = MosesDetokenizer()
+    detokenizer = nltk.tokenize.moses.MosesDetokenizer()
     return detokenizer.detokenize(sent, return_str=True)
 
 
@@ -93,8 +95,9 @@ def choose_sense(sentences, index_to_replace, replacements,
         average_dist.append((sum(pairwise_dist) /
                             (len(pairwise_dist) - 1)))
 
-    min_avg_dist_i = average_dist.index(min(average_dist))
-    return min_avg_dist_i
+    if len(average_dist):
+        min_avg_dist_i = average_dist.index(min(average_dist))
+        return min_avg_dist_i
 
 
 
@@ -144,9 +147,13 @@ if __name__ == '__main__':
                     sentences, s_idx, replacements,
                     embed_func=sif_embeds,
                     distance_func=scipy.spatial.distance.minkowski)
-                pprint.pprint(sentences)
-                pprint.pprint(s_idx, sentences[s_idx][w_idx])
-                pprint.pprint(replacements[sense_i])
+                if sense_i is None:
+                    continue
+                pprint.pprint([detok_sent(sent) for sent in sentences])
+                pprint.pprint((s_idx, w_idx, sentences[s_idx][w_idx]))
+                print("Best sense_i:", sense_i)
+                print(detok_sent(replacements[sense_i]))
+                print("*"*80)
 
 
 
