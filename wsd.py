@@ -171,6 +171,7 @@ if __name__ == '__main__':
                     distance_func=scipy.spatial.distance.minkowski)
                 if sense_i is None:
                     count_skipped += 1
+                    continue
                 pprint.pprint([detok_sent(sent) for sent in orig_sentences])
                 pprint.pprint((s_idx, w_idx, orig_sentences[s_idx][w_idx]))
                 print("Correct sense:", lemma)
@@ -181,7 +182,7 @@ if __name__ == '__main__':
                 print("Predicted sense:", predicted_synset)
                 print("Predicted sense:", predicted_synset.definition())
                 print(detok_sent(replacements[sense_i][0]))
-                print("** ** " * 16)
+                print("*" * 80)
                 if lemma.synset() == predicted_synset:
                     count_correct += 1
                 else:
