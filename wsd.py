@@ -170,7 +170,7 @@ if __name__ == '__main__':
                     embed_func=sif_embeds,
                     distance_func=scipy.spatial.distance.minkowski)
                 if sense_i is None:
-                    continue
+                    count_skipped += 1
                 pprint.pprint([detok_sent(sent) for sent in orig_sentences])
                 pprint.pprint((s_idx, w_idx, orig_sentences[s_idx][w_idx]))
                 print("Correct sense:", lemma)
