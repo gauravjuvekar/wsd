@@ -91,18 +91,25 @@ def choose_sense(sentences, index_to_replace, replacements,
 
     average_dist = []
     s_idx = index_to_replace
-    for replacement in replacements:
-        replaced_para = sentences[:s_idx] + replacement + sentences[s_idx + 1:]
+    synset_avg_dist = dict()
+    for new_sent, synset in replacements:
+        replaced_para = sentences[:s_idx] + new_sent + sentences[s_idx + 1:]
         embeds = embed_func(replaced_para)
         replaced_embed = embeds[s_idx]
         pairwise_dist = [distance_func(replaced_embed, context_embed)
                          for context_embed in embeds]
         # distance with itself will be 0
-        average_dist.append(sum(pairwise_dist) / (len(pairwise_dist) - 1))
+        this_avg_distance = sum(pairwise_dist) / (len(pairwise_dist) - 1)
+        average_dist.append(this_avg_distance)
+        if synset in synset_avg_dist:
+            synset_avg_dist[synset].add(this_avg_distance)
+        else:
+            synset_avg_dist[synset] = set((this_avg_distance,))
 
-    if len(average_dist):
-        return [idx for idx, dist in sorted(enumerate(average_dist),
-                                            key=lambda x: x[1])]
+    for synset, dist_set in synset_avg_dist.items():
+        synset_avg_dist[synset] = sum(dist_set) / len(dist_set)
+
+    return list(sorted(synset_avg_dist.items(), key=lambda x:x[1]))
 
 def eval_semcor(paras):
     count_correct = 0
@@ -142,9 +149,8 @@ def eval_semcor(paras):
                                                  word['w_idx'],
                                                  word['lemma'],
                                                  word['pos']))
-            replacements_sents = [t[0] for t in replacements]
             sense_order = choose_sense(
-                sentences, s_idx, replacements_sents,
+                sentences, s_idx, replacements,
                 embed_func=sif_embeds,
                 distance_func=scipy.spatial.distance.minkowski)
             if not sense_order:
@@ -152,18 +158,21 @@ def eval_semcor(paras):
                 count_skipped += 1
                 continue
 
-            senses = [replacements[i][1] for i in sense_order]
             pprint.pprint([detok_sent(sent) for sent in orig_sentences])
             pprint.pprint(word)
             true_sense = word['sense']
             print("Correct sense:", true_sense)
-            print("Correct sense:", true_sense.synset())
             print("Correct sense:", true_sense.synset().definition())
 
             print("Predicted:")
-            predicted_synset = senses[0]
-            pprint.pprint([(sense, sense.definition()) for sense in senses])
-            print(detok_sent(replacements[sense_order[0]][0]))
+            predicted_synset = sense_order[0][0]
+            pprint.pprint([((sense, dist), sense.definition())
+                           for sense, dist in sense_order])
+            try:
+                rank = [sense for sense, dist in sense_order].index(true_sense)
+            except ValueError:
+                rank = None
+            print("Rank:", rank)
             print("*" * 80)
             if true_sense.synset() == predicted_synset:
                 count_correct += 1
