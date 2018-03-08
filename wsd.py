@@ -12,6 +12,10 @@ import nltk.tokenize.moses
 
 import functools
 
+import logging
+logging.basicConfig(loglevel=logging.DEBUG)
+log = logging.getLogger(__name__)
+
 wordnet = nltk.wordnet.wordnet
 wordnet.ensure_loaded()
 
@@ -40,11 +44,8 @@ def sif_embeds(sent_list):
 
 
 
-def detok_sent(sent):
-    return detok_sent_wrapped(tuple(sent))
-
 @functools.lru_cache()
-def detok_sent_wrapped(sent):
+def detok_sent(sent):
     detokenizer = nltk.tokenize.moses.MosesDetokenizer()
     return detokenizer.detokenize(sent, return_str=True)
 
@@ -58,62 +59,118 @@ def s2v_embed_wrapped(sent):
     return s2v_model.embed_sentence(sent)
 
 
-def s2v_embeds(sent_list):
-    return [s2v_embed_wrapped(detok_sent(sent)) for sent in sent_list]
+def s2v_embeds(sents):
+    return [s2v_embed_wrapped(detok_sent(sent)) for sent in sents]
 
 
-@functools.lru_cache()
-def get_hypernyms(word):
-    hyp_dict = {}
-    for syn in wordnet.synsets(word):
-        #hypernyms() returns a list of hypernyms
-        hyp_dict[syn] = syn.hypernyms()
-    #dictionary with each sense, and corresponding hypernym
-    return hyp_dict
-
-
-def replace_target_word(tok_sent, index):
+def get_replacements(tok_sent, index, lemma=None):
     # given a sentence represented as a list of tokens, and the index of the
     # token to be replaced (i.e the token to be disambiguated), return list of
     # sentences with hypernym replaced for each sense of target token word
-    hyp_dict = get_hypernyms(tok_sent[index])
     lemset = set()
-    for synset, hypernyms in hyp_dict.items():
-        if not len(hypernyms):
-            for lem in synset.lemmas():
-                lemset.add((lem, synset))
-        for hyp in hypernyms:
-            for lem in hyp.lemmas():
-                lemset.add((lem, synset))
+    for synset in wordnet.synsets(lemma):
+        hypernyms = synset.hypernyms()
+        if not hypernyms:
+            log.warn("Synset %s has no hypernyms", synset)
+        for hypernym in hypernyms:
+            for lem in hypernym.lemmas():
+                lemset.add((synset, lem))
 
     sent_list = []
-    for hyp_lemma, synset in sorted(lemset, key=lambda x: x[0]):
-        elem_list = [x for y in lemma.name().split("_") for x in y.split()]
+    for synset, lem in lemset:
+        elem_list = tuple([word
+            for word in nltk.tokenize.word_tokenize(
+                lem.name().replace('_', ' '))
+            ])
         new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
-        sent_list.append((new_sent, synset))
-    return sent_list
+        yield (new_sent, synset)
 
 
 def choose_sense(sentences, index_to_replace, replacements,
                  embed_func, distance_func):
-    # initial_embedding = embed_func(sentences)
-    # orig_sentence = sentences[s_idx]
-    # orig_embed = initial_embedding[s_idx]
 
     average_dist = []
+    s_idx = index_to_replace
     for replacement in replacements:
-        sentences[s_idx] = replacement
-        embed = embed_func(sentences)
-        new_embed = embed[s_idx]
-        pairwise_dist = [distance_func(new_embed, context_embed)
-                         for context_embed in new_embed]
+        replaced_para = sentences[:s_idx] + replacement + sentences[s_idx + 1:]
+        embeds = embed_func(replaced_para)
+        replaced_embed = embeds[s_idx]
+        pairwise_dist = [distance_func(replaced_embed, context_embed)
+                         for context_embed in embeds]
         # distance with itself will be 0
-        average_dist.append((sum(pairwise_dist) /
-                            (len(pairwise_dist) - 1)))
+        average_dist.append(sum(pairwise_dist) / (len(pairwise_dist) - 1))
 
     if len(average_dist):
-        min_avg_dist_i = average_dist.index(min(average_dist))
-        return min_avg_dist_i
+        return [idx for idx, dist in sorted(enumerate(average_dist),
+                                            key=lambda x: x[1])]
+
+def eval_semcor(paras):
+    count_correct = 0
+    count_wrong = 0
+    count_skipped = 0
+
+    for para in paras:
+        sentences = []
+        indices = []
+        for s_idx, sentence in enumerate(para):
+            sent = []
+            w_idx = 0
+            for w_group_idx, word in enumerate(sentence):
+                if word['true_sense'] is None:
+                    # Don't need to disambiguate this word
+                    pass
+                elif isinstance(word['true_sense'], str):
+                    # Should be disambiguated, but we couldn't find it's lemma
+                    # in wordnet
+                    log.warn("No lemma found for %s", word)
+                    count_skipped += 1
+                else:
+                    # Disambiguate this
+                    indices.append({'s_idx': s_idx,
+                                    'w_idx': w_idx,
+                                    'w_group_idx': w_group_idx,
+                                    'sense': word['true_sense'],
+                                    'lemma': word['lemma']})
+                sent.extend(word['words'])
+                w_idx += len(word['words'])
+            sentences.append(tuple(sent))
+        sentences = tuple(sentences)
+        orig_sentences  = sentences
+        for word in indices:
+            replacements = list(get_replacements(sentences[word['s_idx']],
+                                                 word['w_idx'],
+                                                 word['lemma']))
+            replacements_sents = [t[0] for t in replacements]
+            sense_order = choose_sense(
+                sentences, s_idx, replacements_sents,
+                embed_func=sif_embeds,
+                distance_func=scipy.spatial.distance.minkowski)
+            if not sense_order:
+                log.warn("No sense order obtained")
+                count_skipped += 1
+                continue
+
+            senses = [replacements[i][1] for i in sense_order]
+            pprint.pprint([detok_sent(sent) for sent in orig_sentences])
+            pprint.pprint(word)
+            true_sense = word['sense']
+            print("Correct sense:", true_sense)
+            print("Correct sense:", true_sense.synset())
+            print("Correct sense:", true_sense.synset().definition())
+
+            print("Predicted:")
+            predicted_synset = senses[0]
+            pprint.pprint([(sense, sense.definition()) for sense in senses])
+            print(detok_sent(replacements[sense_order[0]][0]))
+            print("*" * 80)
+            if true_sense.synset() == predicted_synset:
+                count_correct += 1
+            else:
+                count_wrong += 1
+
+    print("Total correct", count_correct)
+    print("Total wrong", count_wrong)
+    print("Total skipped", count_skipped)
 
 
 
@@ -140,54 +197,7 @@ if __name__ == '__main__':
     if True:
         semcor_file = './data/datasets/semcor3.0/brownv/tagfiles/br-r01'
         with open(semcor_file, 'rb') as f:
-            paras = semcor_reader.readsemcor(f)
+            paras = semcor_reader.read_semcor(f)
 
-        count_correct = 0
-        count_wrong = 0
-        count_skipped = 0
-        for para in paras:
-            sentences = []
-            indices = []
-            for s_idx, sentence in enumerate(para):
-                sent = []
-                for w_idx, word_tup in enumerate(sentence):
-                    word, lemma = word_tup
-                    if lemma is None:
-                        pass
-                    elif isinstance(lemma, str):
-                        print("No lemma for word %s", word)
-                        count_skipped += 1
-                    else:
-                        indices.append((s_idx, w_idx, lemma))
-                    sent.append(word)
-                sentences.append(sent)
-            orig_sentences  = [[w for w in s] for s in sentences]
-            for s_idx, w_idx, lemma in indices:
-                replacements = replace_target_word(sentences[s_idx], w_idx)
-                replacements_sents = [t[0] for t in replacements]
-                sense_i = choose_sense(
-                    sentences, s_idx, replacements_sents,
-                    embed_func=sif_embeds,
-                    distance_func=scipy.spatial.distance.minkowski)
-                if sense_i is None:
-                    count_skipped += 1
-                    continue
-                pprint.pprint([detok_sent(sent) for sent in orig_sentences])
-                pprint.pprint((s_idx, w_idx, orig_sentences[s_idx][w_idx]))
-                print("Correct sense:", lemma)
-                print("Correct sense:", lemma.synset())
-                print("Correct sense:", lemma.synset().definition())
+        eval_semcor(paras)
 
-                predicted_synset = replacements[sense_i][1]
-                print("Predicted sense:", predicted_synset)
-                print("Predicted sense:", predicted_synset.definition())
-                print(detok_sent(replacements[sense_i][0]))
-                print("*" * 80)
-                if lemma.synset() == predicted_synset:
-                    count_correct += 1
-                else:
-                    count_wrong += 1
-
-        print("Total correct", count_correct)
-        print("Total wrong", count_wrong)
-        print("Total skipped", count_skipped)
