@@ -11,6 +11,7 @@ import nltk.tokenize
 import nltk.tokenize.moses
 
 import functools
+import statistics
 
 import logging
 logging.basicConfig(loglevel=logging.DEBUG)
@@ -70,10 +71,14 @@ def get_replacements(tok_sent, index, lemma, pos=None):
     lemset = set()
     for synset in wordnet.synsets(lemma, pos=pos):
         hypernyms = synset.hypernyms()
-        if not hypernyms:
-            log.warn("Synset %s has no hypernyms", synset)
+        # if not hypernyms:
+            # log.warn("Synset %s has no hypernyms", synset)
+
         for hypernym in hypernyms:
             for lem in hypernym.lemmas():
+                lemset.add((synset, lem))
+        for hyponym in synset.hyponyms():
+            for lem in hyponym.lemmas():
                 lemset.add((synset, lem))
 
     sent_list = []
@@ -91,7 +96,7 @@ def choose_sense(sentences, index_to_replace, replacements,
 
     average_dist = []
     s_idx = index_to_replace
-    synset_avg_dist = dict()
+    synset_dist = dict()
     for new_sent, synset in replacements:
         replaced_para = sentences[:s_idx] + new_sent + sentences[s_idx + 1:]
         embeds = embed_func(replaced_para)
@@ -99,22 +104,27 @@ def choose_sense(sentences, index_to_replace, replacements,
         pairwise_dist = [distance_func(replaced_embed, context_embed)
                          for context_embed in embeds]
         # distance with itself will be 0
-        this_avg_distance = sum(pairwise_dist) / (len(pairwise_dist) - 1)
-        average_dist.append(this_avg_distance)
-        if synset in synset_avg_dist:
-            synset_avg_dist[synset].add(this_avg_distance)
+        this_distance = sum(pairwise_dist) / (len(pairwise_dist) - 1)
+        average_dist.append(this_distance)
+        if synset in synset_dist:
+            synset_dist[synset].add(this_distance)
         else:
-            synset_avg_dist[synset] = set((this_avg_distance,))
+            synset_dist[synset] = set((this_distance,))
 
-    for synset, dist_set in synset_avg_dist.items():
-        synset_avg_dist[synset] = sum(dist_set) / len(dist_set)
+    # for synset, dist_set in synset_dist.items():
+        # synset_dist[synset] = sum(dist_set) / len(dist_set)
 
-    return list(sorted(synset_avg_dist.items(), key=lambda x:x[1]))
+    for synset, dist_set in synset_dist.items():
+        synset_dist[synset] = min(dist_set)
+
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]))
 
 def eval_semcor(paras):
     count_correct = 0
     count_wrong = 0
     count_skipped = 0
+    count_rank_none = 0
+    rank_list = []
 
     for para in paras:
         sentences = []
@@ -169,9 +179,14 @@ def eval_semcor(paras):
             pprint.pprint([((sense, dist), sense.definition())
                            for sense, dist in sense_order])
             try:
-                rank = [sense for sense, dist in sense_order].index(true_sense)
+                rank = [sense for sense, dist in sense_order
+                        ].index(true_sense.synset())
             except ValueError:
                 rank = None
+                count_rank_none += 1
+            else:
+                rank_list.append(rank)
+
             print("Rank:", rank)
             print("*" * 80)
             if true_sense.synset() == predicted_synset:
@@ -182,6 +197,10 @@ def eval_semcor(paras):
     print("Total correct", count_correct)
     print("Total wrong", count_wrong)
     print("Total skipped", count_skipped)
+    print("Total rank None", count_rank_none)
+
+    print("Mean rank", statistics.mean(rank_list))
+    print("Median rank", statistics.median_grouped(rank_list))
 
 
 
