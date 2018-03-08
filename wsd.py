@@ -63,12 +63,12 @@ def s2v_embeds(sents):
     return [s2v_embed_wrapped(detok_sent(sent)) for sent in sents]
 
 
-def get_replacements(tok_sent, index, lemma=None):
+def get_replacements(tok_sent, index, lemma, pos=None):
     # given a sentence represented as a list of tokens, and the index of the
     # token to be replaced (i.e the token to be disambiguated), return list of
     # sentences with hypernym replaced for each sense of target token word
     lemset = set()
-    for synset in wordnet.synsets(lemma):
+    for synset in wordnet.synsets(lemma, pos=pos):
         hypernyms = synset.hypernyms()
         if not hypernyms:
             log.warn("Synset %s has no hypernyms", synset)
@@ -130,7 +130,8 @@ def eval_semcor(paras):
                                     'w_idx': w_idx,
                                     'w_group_idx': w_group_idx,
                                     'sense': word['true_sense'],
-                                    'lemma': word['lemma']})
+                                    'lemma': word['lemma'],
+                                    'pos': word['pos']})
                 sent.extend(word['words'])
                 w_idx += len(word['words'])
             sentences.append(tuple(sent))
@@ -139,7 +140,8 @@ def eval_semcor(paras):
         for word in indices:
             replacements = list(get_replacements(sentences[word['s_idx']],
                                                  word['w_idx'],
-                                                 word['lemma']))
+                                                 word['lemma'],
+                                                 word['pos']))
             replacements_sents = [t[0] for t in replacements]
             sense_order = choose_sense(
                 sentences, s_idx, replacements_sents,
