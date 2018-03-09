@@ -71,15 +71,25 @@ def get_replacements(tok_sent, index, lemma, pos=None):
     lemset = set()
     for synset in wordnet.synsets(lemma, pos=pos):
         hypernyms = synset.hypernyms()
-        # if not hypernyms:
-            # log.warn("Synset %s has no hypernyms", synset)
+        hyponyms = synset.hyponyms()
+        if not hypernyms:
+            log.warn("Synset %s has no hypernyms", synset)
+        if not hyponyms:
+            log.warn("Synset %s has no hyponyms", synset)
+        if not hypernyms and not hyponyms:
+            definition = nltk.tokenize.word_tokenize(synset.definition())
+            elem_list = tuple([word for word in definition])
+            new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
+            yield new_sent, synset
+
 
         for hypernym in hypernyms:
             for lem in hypernym.lemmas():
                 lemset.add((synset, lem))
-        for hyponym in synset.hyponyms():
+        for hyponym in hyponyms:
             for lem in hyponym.lemmas():
                 lemset.add((synset, lem))
+
 
     sent_list = []
     for synset, lem in lemset:
@@ -88,7 +98,8 @@ def get_replacements(tok_sent, index, lemma, pos=None):
                 lem.name().replace('_', ' '))
             ])
         new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
-        yield (new_sent, synset)
+        yield new_sent, synset
+
 
 
 def choose_sense(sentences, index_to_replace, replacements,
@@ -162,7 +173,7 @@ def eval_semcor(paras):
             sense_order = choose_sense(
                 sentences, s_idx, replacements,
                 embed_func=sif_embeds,
-                distance_func=scipy.spatial.distance.minkowski)
+                distance_func=scipy.spatial.distance.sqeuclidean)
             if not sense_order:
                 log.warn("No sense order obtained")
                 count_skipped += 1
