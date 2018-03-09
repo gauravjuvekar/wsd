@@ -139,16 +139,20 @@ def choose_sense_nocontext(sentences, index_to_replace, replacements,
         orig_sent = sentences[index_to_replace]
         embeds = embed_func((orig_sent, new_sent))
         this_distance = distance_func(embeds[0], embeds[1])
-        dist.append(this_distance)
+        cosine_dist = scipy.spatial.distance.cosine(embeds[0], embeds[1])
+        dist.append((this_distance, cosine_dist))
         if synset in synset_dist:
-            synset_dist[synset].add(this_distance)
+            synset_dist[synset].add((this_distance, cosine_dist))
         else:
-            synset_dist[synset] = set((this_distance,))
+            synset_dist[synset] = set(((this_distance, cosine_dist),))
 
     for synset, dist_set in synset_dist.items():
-        synset_dist[synset] = min(dist_set)
+        synset_dist[synset] = min(dist_set, key=lambda x: x[0])
 
-    return list(sorted(synset_dist.items(), key=lambda x:x[1]))
+    sort_1 = list(sorted(synset_dist.items(), key=lambda x:x[1][0]))
+    sort_2 = list(sorted(sort_1[:max(1, len(sort_1) // 2 + 1)],
+                         key=lambda x:x[1][1]))
+    return sort_2
 
 
 def eval_semcor(paras):
@@ -194,7 +198,7 @@ def eval_semcor(paras):
             sense_order = choose_sense_nocontext(
                 sentences, s_idx, replacements,
                 embed_func=sif_embeds,
-                distance_func=scipy.spatial.distance.cosine)
+                distance_func=scipy.spatial.distance.sqeuclidean)
             if not sense_order:
                 log.warn("No sense order obtained")
                 count_skipped += 1
@@ -233,6 +237,7 @@ def eval_semcor(paras):
 
     print("Mean rank", statistics.mean(rank_list))
     print("Median rank", statistics.median_grouped(rank_list))
+
 
 
 
