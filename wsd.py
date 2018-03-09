@@ -194,7 +194,7 @@ def eval_semcor(paras):
             sense_order = choose_sense_nocontext(
                 sentences, s_idx, replacements,
                 embed_func=sif_embeds,
-                distance_func=scipy.spatial.distance.sqeuclidean)
+                distance_func=scipy.spatial.distance.cosine)
             if not sense_order:
                 log.warn("No sense order obtained")
                 count_skipped += 1
