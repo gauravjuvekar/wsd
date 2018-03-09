@@ -104,7 +104,6 @@ def get_replacements(tok_sent, index, lemma, pos=None):
 
 def choose_sense(sentences, index_to_replace, replacements,
                  embed_func, distance_func):
-
     average_dist = []
     s_idx = index_to_replace
     synset_dist = dict()
@@ -129,6 +128,28 @@ def choose_sense(sentences, index_to_replace, replacements,
         synset_dist[synset] = min(dist_set)
 
     return list(sorted(synset_dist.items(), key=lambda x:x[1]))
+
+
+def choose_sense_nocontext(sentences, index_to_replace, replacements,
+                           embed_func, distance_func):
+    s_idx = index_to_replace
+    dist = []
+    synset_dist = dict()
+    for new_sent, synset in replacements:
+        orig_sent = sentences[index_to_replace]
+        embeds = embed_func((orig_sent, new_sent))
+        this_distance = distance_func(embeds[0], embeds[1])
+        dist.append(this_distance)
+        if synset in synset_dist:
+            synset_dist[synset].add(this_distance)
+        else:
+            synset_dist[synset] = set((this_distance,))
+
+    for synset, dist_set in synset_dist.items():
+        synset_dist[synset] = min(dist_set)
+
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]))
+
 
 def eval_semcor(paras):
     count_correct = 0
@@ -170,7 +191,7 @@ def eval_semcor(paras):
                                                  word['w_idx'],
                                                  word['lemma'],
                                                  word['pos']))
-            sense_order = choose_sense(
+            sense_order = choose_sense_nocontext(
                 sentences, s_idx, replacements,
                 embed_func=sif_embeds,
                 distance_func=scipy.spatial.distance.sqeuclidean)
