@@ -150,8 +150,9 @@ def choose_sense_nocontext(sentences, index_to_replace, replacements,
         synset_dist[synset] = min(dist_set, key=lambda x: x[0])
 
     sort_1 = list(sorted(synset_dist.items(), key=lambda x:x[1][0]))
-    sort_2 = list(sorted(sort_1[:max(1, len(sort_1) // 2 + 1)],
-                         key=lambda x:x[1][1]))
+    high_idx = max(1, len(sort_1) // 2 + 1)
+    sort_2 = (list(sorted(sort_1[:high_idx], key=lambda x:x[1][1])) +
+              list(sort_1[high_idx:]))
     return sort_2
 
 
