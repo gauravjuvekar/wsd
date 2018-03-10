@@ -14,6 +14,7 @@ cython = "*"
 sklearn = "*"
 "bs4" = "*"
 nltk = "*"
+pywsd = "*"
 
 
 [dev-packages]

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "388a61a04cd2fe5ae61c2a7de769f6920524d4170066afd1dc820a686fd7004c"
+            "sha256": "e610c350bebede83b9f49dd44d5878e4297fc10f0a376ec2fd3df566235a3b5f"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -99,6 +99,12 @@
                 "sha256:fa0944650d5d3fb95869eaacd8eedbd2d83610c85e271bd9d3495ffa9bc4dc9c"
             ],
             "version": "==1.14.1"
+        },
+        "pywsd": {
+            "hashes": [
+                "sha256:9cf81854a98780f4fc6e97a32374ee33ff70d76248edbf61e1d9ae6998bf35b7"
+            ],
+            "version": "==1.0.4"
         },
         "scikit-learn": {
             "hashes": [
