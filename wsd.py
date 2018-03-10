@@ -4,6 +4,7 @@ import sent2vec
 import semcor_reader
 import scipy
 import scipy.spatial
+import scipy.stats
 import scipy.spatial.distance
 
 import nltk
@@ -14,8 +15,9 @@ import functools
 import statistics
 
 import logging
-logging.basicConfig(loglevel=logging.DEBUG)
+logging.basicConfig()
 log = logging.getLogger(__name__)
+log.setLevel(logging.WARNING)
 
 wordnet = nltk.wordnet.wordnet
 wordnet.ensure_loaded()
@@ -73,9 +75,9 @@ def get_replacements(tok_sent, index, lemma, pos=None):
         hypernyms = synset.hypernyms()
         hyponyms = synset.hyponyms()
         if not hypernyms:
-            log.warn("Synset %s has no hypernyms", synset)
+            log.info("Synset %s has no hypernyms", synset)
         if not hyponyms:
-            log.warn("Synset %s has no hyponyms", synset)
+            log.info("Synset %s has no hyponyms", synset)
         if not hypernyms and not hyponyms:
             definition = nltk.tokenize.word_tokenize(synset.definition())
             elem_list = tuple([word for word in definition])
@@ -140,11 +142,10 @@ def choose_sense_nocontext(sentences, index_to_replace, replacements,
         embeds = embed_func((orig_sent, new_sent))
         this_distance = distance_func(embeds[0], embeds[1])
         cosine_dist = scipy.spatial.distance.cosine(embeds[0], embeds[1])
-        dist.append((this_distance, cosine_dist))
         if synset in synset_dist:
-            synset_dist[synset].add((this_distance, cosine_dist))
+            synset_dist[synset].add((this_distance, cosine_dist, tuple(embeds[1])))
         else:
-            synset_dist[synset] = set(((this_distance, cosine_dist),))
+            synset_dist[synset] = set(((this_distance, cosine_dist, tuple(embeds[1])),))
 
     for synset, dist_set in synset_dist.items():
         synset_dist[synset] = min(dist_set, key=lambda x: x[0])
@@ -163,6 +164,8 @@ def eval_semcor(paras):
     count_rank_none = 0
     rank_list = []
 
+    n_words = 0
+    n_senses = 0
     for para in paras:
         sentences = []
         indices = []
@@ -192,6 +195,8 @@ def eval_semcor(paras):
         sentences = tuple(sentences)
         orig_sentences  = sentences
         for word in indices:
+            n_senses += len(wordnet.synsets(word['lemma'], word['pos']))
+            n_words += 1
             replacements = list(get_replacements(sentences[word['s_idx']],
                                                  word['w_idx'],
                                                  word['lemma'],
@@ -213,7 +218,7 @@ def eval_semcor(paras):
 
             print("Predicted:")
             predicted_synset = sense_order[0][0]
-            pprint.pprint([((sense, dist), sense.definition())
+            pprint.pprint([((sense, dist[0]), sense.definition())
                            for sense, dist in sense_order])
             try:
                 rank = [sense for sense, dist in sense_order
@@ -225,7 +230,17 @@ def eval_semcor(paras):
                 rank_list.append(rank)
 
             print("Rank:", rank)
+            if rank == 1 and len(sense_order) >= 2:
+                print('0-1 distance',
+                    "Euclidean",
+                    scipy.spatial.distance.euclidean(
+                        sense_order[0][1][2], sense_order[1][1][2]),
+                    "Cosine",
+                    scipy.spatial.distance.cosine(
+                        sense_order[0][1][2], sense_order[1][1][2]))
             print("*" * 80)
+
+
             if true_sense.synset() == predicted_synset:
                 count_correct += 1
             else:
@@ -238,6 +253,12 @@ def eval_semcor(paras):
 
     print("Mean rank", statistics.mean(rank_list))
     print("Median rank", statistics.median_grouped(rank_list))
+
+    historgram = scipy.stats.itemfreq(rank_list)
+    print("Rank histogram")
+    pprint.pprint(historgram)
+
+    print("Avg senses per word", n_senses / n_words)
 
 
 
