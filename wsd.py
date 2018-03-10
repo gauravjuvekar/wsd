@@ -143,9 +143,11 @@ def choose_sense_nocontext(sentences, index_to_replace, replacements,
         this_distance = distance_func(embeds[0], embeds[1])
         cosine_dist = scipy.spatial.distance.cosine(embeds[0], embeds[1])
         if synset in synset_dist:
-            synset_dist[synset].add((this_distance, cosine_dist, tuple(embeds[1])))
+            synset_dist[synset].add(
+                (this_distance, cosine_dist, tuple(embeds[1])))
         else:
-            synset_dist[synset] = set(((this_distance, cosine_dist, tuple(embeds[1])),))
+            synset_dist[synset] = set(
+                ((this_distance, cosine_dist, tuple(embeds[1])),))
 
     for synset, dist_set in synset_dist.items():
         synset_dist[synset] = min(dist_set, key=lambda x: x[0])
@@ -209,6 +211,8 @@ def eval_semcor(paras):
                 log.warn("No sense order obtained")
                 count_skipped += 1
                 continue
+
+            clustered_senses =
 
             pprint.pprint([detok_sent(sent) for sent in orig_sentences])
             pprint.pprint(word)
