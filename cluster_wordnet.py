@@ -50,7 +50,7 @@ def cluster(synsets):
     dist = pairwise_dist(synsets)
     upper = np.triu(dist)
     nonzero_upper = upper[upper > 0]
-    eps = np.percentile(nonzero_upper, 10)
+    eps = np.percentile(nonzero_upper, 20)
     print("EPS:", eps)
     clusterer = sklearn.cluster.DBSCAN(
         eps=eps,

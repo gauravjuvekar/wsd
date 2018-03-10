@@ -3,6 +3,7 @@ import SIF
 import sent2vec
 import semcor_reader
 import cluster_wordnet
+import baseline
 
 import scipy
 import scipy.spatial
@@ -12,6 +13,8 @@ import scipy.spatial.distance
 import nltk
 import nltk.tokenize
 import nltk.tokenize.moses
+
+import pywsd
 
 import functools
 import statistics
@@ -167,6 +170,10 @@ def eval_semcor(paras):
     count_skipped = 0
     count_rank_none = 0
     count_same_cluster = 0
+
+    baseline_first_count = 0
+    baseline_random_count = 0
+    baseline_most_frequent_count = 0
     rank_list = []
 
     n_words = 0
@@ -214,6 +221,10 @@ def eval_semcor(paras):
                 log.warn("No sense order obtained")
                 count_skipped += 1
                 continue
+            baseline_first = baseline.first_sense(word['lemma'], word['pos'])
+            baseline_random = baseline.random_sense(word['lemma'], word['pos'])
+            baseline_most_frequent = baseline.max_lemma_count_sense(
+                word['lemma'], word['pos'])
 
             pprint.pprint([detok_sent(sent) for sent in orig_sentences])
             pprint.pprint(word)
@@ -255,6 +266,7 @@ def eval_semcor(paras):
                     break
 
 
+
             print("*" * 80)
 
 
@@ -263,11 +275,22 @@ def eval_semcor(paras):
             else:
                 count_wrong += 1
 
+            if true_sense == baseline_first:
+                baseline_first_count += 1
+            if true_sense == baseline_random:
+                baseline_random_count += 1
+            if true_sense == baseline_most_frequent:
+                baseline_most_frequent_count += 1
+
     print("Total correct", count_correct)
     print("Total wrong", count_wrong)
     print("Total skipped", count_skipped)
     print("Total same cluster", count_same_cluster)
     print("Total rank None", count_rank_none)
+
+    print("Baseline first correct", baseline_first_count)
+    print("Baseline random correct", baseline_random_count)
+    print("Baseline most frequent correct", baseline_most_frequent_count)
 
     print("Mean rank", statistics.mean(rank_list))
     print("Median rank", statistics.median_grouped(rank_list))
