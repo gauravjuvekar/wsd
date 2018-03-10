@@ -2,6 +2,8 @@
 import SIF
 import sent2vec
 import semcor_reader
+import cluster_wordnet
+
 import scipy
 import scipy.spatial
 import scipy.stats
@@ -164,6 +166,7 @@ def eval_semcor(paras):
     count_wrong = 0
     count_skipped = 0
     count_rank_none = 0
+    count_same_cluster = 0
     rank_list = []
 
     n_words = 0
@@ -212,13 +215,12 @@ def eval_semcor(paras):
                 count_skipped += 1
                 continue
 
-            clustered_senses =
-
             pprint.pprint([detok_sent(sent) for sent in orig_sentences])
             pprint.pprint(word)
             true_sense = word['sense']
+            true_sense = true_sense.synset()
             print("Correct sense:", true_sense)
-            print("Correct sense:", true_sense.synset().definition())
+            print("Correct sense:", true_sense.definition())
 
             print("Predicted:")
             predicted_synset = sense_order[0][0]
@@ -226,7 +228,7 @@ def eval_semcor(paras):
                            for sense, dist in sense_order])
             try:
                 rank = [sense for sense, dist in sense_order
-                        ].index(true_sense.synset())
+                        ].index(true_sense)
             except ValueError:
                 rank = None
                 count_rank_none += 1
@@ -242,10 +244,21 @@ def eval_semcor(paras):
                     "Cosine",
                     scipy.spatial.distance.cosine(
                         sense_order[0][1][2], sense_order[1][1][2]))
+
+            clustered_senses = cluster_wordnet.cluster(
+                [sense[0] for sense in sense_order])
+
+            pprint.pprint(clustered_senses)
+            for cluster in clustered_senses:
+                if true_sense in cluster and predicted_synset in cluster:
+                    count_same_cluster += 1
+                    break
+
+
             print("*" * 80)
 
 
-            if true_sense.synset() == predicted_synset:
+            if true_sense == predicted_synset:
                 count_correct += 1
             else:
                 count_wrong += 1
@@ -253,6 +266,7 @@ def eval_semcor(paras):
     print("Total correct", count_correct)
     print("Total wrong", count_wrong)
     print("Total skipped", count_skipped)
+    print("Total same cluster", count_same_cluster)
     print("Total rank None", count_rank_none)
 
     print("Mean rank", statistics.mean(rank_list))
