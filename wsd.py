@@ -18,6 +18,7 @@ import pywsd
 
 import functools
 import statistics
+from collections import defaultdict
 
 import logging
 logging.basicConfig()
@@ -74,6 +75,13 @@ def s2v_embeds(sents):
     return [s2v_embed_wrapped(detok_sent(sent)) for sent in sents]
 
 
+def underscore_tokenize(sentence):
+    return tuple(
+        [word for word in
+            nltk.tokenize.word_tokenize(sentence.replace('_', ' '))
+            ])
+
+
 def get_replacements(tok_sent, index, lemma, pos=None):
     # given a sentence represented as a list of tokens, and the index of the
     # token to be replaced (i.e the token to be disambiguated), return list of
@@ -87,8 +95,7 @@ def get_replacements(tok_sent, index, lemma, pos=None):
         if not hyponyms:
             log.info("Synset %s has no hyponyms", synset)
         if not hypernyms and not hyponyms:
-            definition = nltk.tokenize.word_tokenize(synset.definition())
-            elem_list = tuple([word for word in definition])
+            elem_list = underscore_tokenize(synset.definition())
             new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
             yield new_sent, synset
 
@@ -103,10 +110,7 @@ def get_replacements(tok_sent, index, lemma, pos=None):
 
     sent_list = []
     for synset, lem in lemset:
-        elem_list = tuple([word
-            for word in nltk.tokenize.word_tokenize(
-                lem.name().replace('_', ' '))
-            ])
+        elem_list = underscore_tokenize(lem.name())
         new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
         yield new_sent, synset
 
@@ -122,7 +126,7 @@ def choose_sense(sentences, target_word, embed_func, distance_func):
 
     average_dist = []
     s_idx = target_word['s_idx']
-    synset_dist = dict()
+    synset_dist = defaultdict(set)
 
     for new_sent, synset in replacements:
         replaced_para = sentences[:s_idx] + new_sent + sentences[s_idx + 1:]
@@ -133,11 +137,7 @@ def choose_sense(sentences, target_word, embed_func, distance_func):
         # distance with itself will be 0
         this_distance = sum(pairwise_dist) / (len(pairwise_dist) - 1)
         average_dist.append(this_distance)
-
-        if synset in synset_dist:
-            synset_dist[synset].add(this_distance)
-        else:
-            synset_dist[synset] = {this_distance}
+        synset_dist[synset].add(this_distance)
 
     # for synset, dist_set in synset_dist.items():
         # synset_dist[synset] = sum(dist_set) / len(dist_set)
@@ -161,7 +161,7 @@ def choose_sense_nocontext_double_sort(
 
     s_idx = target_word['s_idx']
     dist = []
-    synset_dist = dict()
+    synset_dist = defaultdict(list)
     for new_sent, synset in replacements:
         orig_sent = sentences[s_idx]
         embeds = embed_func((orig_sent, new_sent))
@@ -171,19 +171,33 @@ def choose_sense_nocontext_double_sort(
         append_dict = {'dist': this_distance,
                        'cosine_dist': cosine_dist,
                        'embedding': embeds[1]}
-        if synset in synset_dist:
-            synset_dist[synset].append(append_dict)
-        else:
-            synset_dist[synset] = [append_dict]
+        synset_dist[synset].append(append_dict)
 
     for synset, dist in synset_dist.items():
         synset_dist[synset] = min(dist, key=lambda x: x['dist'])
 
     sort_1 = list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
     high_idx = max(1, len(sort_1) // 2 + 1)
-    sort_2 = (list(sorted(sort_1[:high_idx], key=lambda x:x[1]['cosine_dist'])) +
-              list(sort_1[high_idx:]))
+    sort_2 = (
+        list(sorted(sort_1[:high_idx], key=lambda x:x[1]['cosine_dist'])) +
+        list(sort_1[high_idx:]))
     return sort_2
+
+
+def choose_sense_definition(
+        sentences, target_word, embed_func, distance_func):
+    orig_sent = sentences[target_word['s_idx']]
+    synset_dist = defaultdict(list)
+    for synset in wordnet.synsets(target_word['lemma'], target_word['pos']):
+        definition = underscore_tokenize(synset.definition())
+        embeds = embed_func((orig_sent, definition))
+        distance = distance_func(embeds[0], embeds[1])
+        append_dict = {'dist': distance, 'embedding': embeds[1]}
+        synset_dist[synset].append(append_dict)
+
+    for synset, dist in synset_dist.items():
+        synset_dist[synset] = min(dist, key=lambda x: x['dist'])
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
 
 
 def eval_semcor(paras):
@@ -197,19 +211,22 @@ def eval_semcor(paras):
     baseline_random_count = 0
     baseline_most_frequent_count = 0
 
-    stats = {
-        'baseline_first': 0,
-        'same_cluster_baseline_first': 0,
-        'baseline_random': 0,
-        'same_cluster_baseline_random': 0,
-        'baseline_most_frequent': 0,
-        'same_cluster_baseline_most_frequent': 0,
-        'nocontext_double_sort': 0,
-        'same_cluster_nocontext_double_sort': 0,
-        'context_sentences': 0,
-        'same_cluster_context_sentences': 0,
-        'total': 0,
-        }
+    stats = defaultdict(int)
+    # {
+        # 'baseline_first': 0,
+        # 'same_cluster_baseline_first': 0,
+        # 'baseline_random': 0,
+        # 'same_cluster_baseline_random': 0,
+        # 'baseline_most_frequent': 0,
+        # 'same_cluster_baseline_most_frequent': 0,
+        # 'nocontext_double_sort': 0,
+        # 'same_cluster_nocontext_double_sort': 0,
+        # 'context_sentences': 0,
+        # 'same_cluster_context_sentences': 0,
+        # 'definition': 0,
+        # 'same_cluster_definition': 0,
+        # 'total': 0,
+    # }
 
 
     rank_list = []
@@ -266,6 +283,11 @@ def eval_semcor(paras):
                     target_word=word,
                     embed_func=sif_embeds,
                     distance_func=scipy.spatial.distance.cosine))
+            sense_output['definition'] = choose_sense_definition(
+                sentences,
+                target_word=word,
+                embed_func=sif_embeds,
+                distance_func=scipy.spatial.distance.sqeuclidean)
 
             true_sense = word['sense'].synset()
             clustered_senses = cluster_wordnet.cluster(
