@@ -4,6 +4,11 @@ import sklearn
 import sklearn.cluster
 import numpy as np
 
+import logging
+logging.basicConfig()
+log = logging.getLogger(__name__)
+log.setLevel(logging.WARNING)
+
 wn = nltk.wordnet.wordnet
 
 
@@ -51,7 +56,7 @@ def cluster(synsets):
     upper = np.triu(dist)
     nonzero_upper = upper[upper > 0]
     eps = np.percentile(nonzero_upper, 20)
-    print("EPS:", eps)
+    log.info("EPS %s", eps)
     clusterer = sklearn.cluster.DBSCAN(
         eps=eps,
         min_samples=1,

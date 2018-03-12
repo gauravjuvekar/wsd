@@ -24,6 +24,9 @@ logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.WARNING)
 
+import numpy
+numpy.set_printoptions(threshold=10)
+
 wordnet = nltk.wordnet.wordnet
 wordnet.ensure_loaded()
 
@@ -109,11 +112,18 @@ def get_replacements(tok_sent, index, lemma, pos=None):
 
 
 
-def choose_sense(sentences, index_to_replace, replacements,
-                 embed_func, distance_func):
+def choose_sense(sentences, target_word, embed_func, distance_func):
+    replacements = list(
+        get_replacements(
+            sentences[target_word['s_idx']],
+            target_word['w_idx'],
+            target_word['lemma'],
+            target_word['pos']))
+
     average_dist = []
-    s_idx = index_to_replace
+    s_idx = target_word['s_idx']
     synset_dist = dict()
+
     for new_sent, synset in replacements:
         replaced_para = sentences[:s_idx] + new_sent + sentences[s_idx + 1:]
         embeds = embed_func(replaced_para)
@@ -123,10 +133,11 @@ def choose_sense(sentences, index_to_replace, replacements,
         # distance with itself will be 0
         this_distance = sum(pairwise_dist) / (len(pairwise_dist) - 1)
         average_dist.append(this_distance)
+
         if synset in synset_dist:
             synset_dist[synset].add(this_distance)
         else:
-            synset_dist[synset] = set((this_distance,))
+            synset_dist[synset] = {this_distance}
 
     # for synset, dist_set in synset_dist.items():
         # synset_dist[synset] = sum(dist_set) / len(dist_set)
@@ -134,32 +145,43 @@ def choose_sense(sentences, index_to_replace, replacements,
     for synset, dist_set in synset_dist.items():
         synset_dist[synset] = min(dist_set)
 
-    return list(sorted(synset_dist.items(), key=lambda x:x[1]))
+    return [
+        (synset, {'dist': dist})
+        for synset, dist in sorted(synset_dist.items(), key=lambda x:x[1])]
 
 
-def choose_sense_nocontext(sentences, index_to_replace, replacements,
-                           embed_func, distance_func):
-    s_idx = index_to_replace
+def choose_sense_nocontext_double_sort(
+        sentences, target_word, embed_func, distance_func):
+    replacements = list(
+        get_replacements(
+            sentences[target_word['s_idx']],
+            target_word['w_idx'],
+            target_word['lemma'],
+            target_word['pos']))
+
+    s_idx = target_word['s_idx']
     dist = []
     synset_dist = dict()
     for new_sent, synset in replacements:
-        orig_sent = sentences[index_to_replace]
+        orig_sent = sentences[s_idx]
         embeds = embed_func((orig_sent, new_sent))
         this_distance = distance_func(embeds[0], embeds[1])
         cosine_dist = scipy.spatial.distance.cosine(embeds[0], embeds[1])
+
+        append_dict = {'dist': this_distance,
+                       'cosine_dist': cosine_dist,
+                       'embedding': embeds[1]}
         if synset in synset_dist:
-            synset_dist[synset].add(
-                (this_distance, cosine_dist, tuple(embeds[1])))
+            synset_dist[synset].append(append_dict)
         else:
-            synset_dist[synset] = set(
-                ((this_distance, cosine_dist, tuple(embeds[1])),))
+            synset_dist[synset] = [append_dict]
 
-    for synset, dist_set in synset_dist.items():
-        synset_dist[synset] = min(dist_set, key=lambda x: x[0])
+    for synset, dist in synset_dist.items():
+        synset_dist[synset] = min(dist, key=lambda x: x['dist'])
 
-    sort_1 = list(sorted(synset_dist.items(), key=lambda x:x[1][0]))
+    sort_1 = list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
     high_idx = max(1, len(sort_1) // 2 + 1)
-    sort_2 = (list(sorted(sort_1[:high_idx], key=lambda x:x[1][1])) +
+    sort_2 = (list(sorted(sort_1[:high_idx], key=lambda x:x[1]['cosine_dist'])) +
               list(sort_1[high_idx:]))
     return sort_2
 
@@ -174,8 +196,23 @@ def eval_semcor(paras):
     baseline_first_count = 0
     baseline_random_count = 0
     baseline_most_frequent_count = 0
-    rank_list = []
 
+    stats = {
+        'baseline_first': 0,
+        'same_cluster_baseline_first': 0,
+        'baseline_random': 0,
+        'same_cluster_baseline_random': 0,
+        'baseline_most_frequent': 0,
+        'same_cluster_baseline_most_frequent': 0,
+        'nocontext_double_sort': 0,
+        'same_cluster_nocontext_double_sort': 0,
+        'context_sentences': 0,
+        'same_cluster_context_sentences': 0,
+        'total': 0,
+        }
+
+
+    rank_list = []
     n_words = 0
     n_senses = 0
     for para in paras:
@@ -209,98 +246,54 @@ def eval_semcor(paras):
         for word in indices:
             n_senses += len(wordnet.synsets(word['lemma'], word['pos']))
             n_words += 1
-            replacements = list(get_replacements(sentences[word['s_idx']],
-                                                 word['w_idx'],
-                                                 word['lemma'],
-                                                 word['pos']))
-            sense_order = choose_sense_nocontext(
-                sentences, s_idx, replacements,
-                embed_func=sif_embeds,
-                distance_func=scipy.spatial.distance.sqeuclidean)
-            if not sense_order:
-                log.warn("No sense order obtained")
-                count_skipped += 1
-                continue
-            baseline_first = baseline.first_sense(word['lemma'], word['pos'])
-            baseline_random = baseline.random_sense(word['lemma'], word['pos'])
-            baseline_most_frequent = baseline.max_lemma_count_sense(
+
+            sense_output = dict()
+            sense_output['baseline_first'] = baseline.first_sense(
                 word['lemma'], word['pos'])
+            sense_output['baseline_random'] = baseline.random_sense(
+                word['lemma'], word['pos'])
+            sense_output['baseline_most_frequent'] = (
+                baseline.max_lemma_count_sense(word['lemma'], word['pos']))
+            sense_output['nocontext_double_sort'] = (
+                choose_sense_nocontext_double_sort(
+                    sentences,
+                    target_word=word,
+                    embed_func=sif_embeds,
+                    distance_func=scipy.spatial.distance.sqeuclidean))
+            sense_output['context_sentences'] = (
+                choose_sense(
+                    sentences,
+                    target_word=word,
+                    embed_func=sif_embeds,
+                    distance_func=scipy.spatial.distance.cosine))
+
+            true_sense = word['sense'].synset()
+            clustered_senses = cluster_wordnet.cluster(
+                wordnet.synsets(word['lemma'], word['pos']))
+            stats['total'] += 1
+            for method, result in sense_output.items():
+                if not result:
+                    log.warn('No result for %s', method)
+                    continue
+                predicted_sense = result[0][0]
+                if true_sense == predicted_sense:
+                    stats[method] += 1
+                for cluster in clustered_senses:
+                    if true_sense in cluster and predicted_sense in cluster:
+                        stats['same_cluster_' + method] += 1
+                        break
+
 
             pprint.pprint([detok_sent(sent) for sent in orig_sentences])
             pprint.pprint(word)
-            true_sense = word['sense']
-            true_sense = true_sense.synset()
-            print("Correct sense:", true_sense)
             print("Correct sense:", true_sense.definition())
 
             print("Predicted:")
-            predicted_synset = sense_order[0][0]
-            pprint.pprint([((sense, dist[0]), sense.definition())
-                           for sense, dist in sense_order])
-            try:
-                rank = [sense for sense, dist in sense_order
-                        ].index(true_sense)
-            except ValueError:
-                rank = None
-                count_rank_none += 1
-            else:
-                rank_list.append(rank)
-
-            print("Rank:", rank)
-            if rank == 1 and len(sense_order) >= 2:
-                print('0-1 distance',
-                    "Euclidean",
-                    scipy.spatial.distance.euclidean(
-                        sense_order[0][1][2], sense_order[1][1][2]),
-                    "Cosine",
-                    scipy.spatial.distance.cosine(
-                        sense_order[0][1][2], sense_order[1][1][2]))
-
-            clustered_senses = cluster_wordnet.cluster(
-                [sense[0] for sense in sense_order])
-
-            pprint.pprint(clustered_senses)
-            for cluster in clustered_senses:
-                if true_sense in cluster and predicted_synset in cluster:
-                    count_same_cluster += 1
-                    break
-
-
+            pprint.pprint(sense_output)
 
             print("*" * 80)
 
-
-            if true_sense == predicted_synset:
-                count_correct += 1
-            else:
-                count_wrong += 1
-
-            if true_sense == baseline_first:
-                baseline_first_count += 1
-            if true_sense == baseline_random:
-                baseline_random_count += 1
-            if true_sense == baseline_most_frequent:
-                baseline_most_frequent_count += 1
-
-    print("Total correct", count_correct)
-    print("Total wrong", count_wrong)
-    print("Total skipped", count_skipped)
-    print("Total same cluster", count_same_cluster)
-    print("Total rank None", count_rank_none)
-
-    print("Baseline first correct", baseline_first_count)
-    print("Baseline random correct", baseline_random_count)
-    print("Baseline most frequent correct", baseline_most_frequent_count)
-
-    print("Mean rank", statistics.mean(rank_list))
-    print("Median rank", statistics.median_grouped(rank_list))
-
-    historgram = scipy.stats.itemfreq(rank_list)
-    print("Rank histogram")
-    pprint.pprint(historgram)
-
-    print("Avg senses per word", n_senses / n_words)
-
+    pprint.pprint(stats)
 
 
 
