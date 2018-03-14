@@ -20,17 +20,19 @@ import functools
 import statistics
 from collections import defaultdict
 
+import numpy
+numpy.set_printoptions(threshold=10)
+
+import os
+
 import logging
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.WARNING)
 
-import numpy
-numpy.set_printoptions(threshold=10)
 
 wordnet = nltk.wordnet.wordnet
 wordnet.ensure_loaded()
-
 
 ENABLE = (
     'sif',
@@ -200,18 +202,9 @@ def choose_sense_definition(
     return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
 
 
-def eval_semcor(paras):
-    count_correct = 0
-    count_wrong = 0
-    count_skipped = 0
-    count_rank_none = 0
-    count_same_cluster = 0
-
-    baseline_first_count = 0
-    baseline_random_count = 0
-    baseline_most_frequent_count = 0
-
-    stats = defaultdict(int)
+def eval_semcor(paras, stats=None):
+    if stats is None:
+        stats = defaultdict(int)
     # {
         # 'baseline_first': 0,
         # 'same_cluster_baseline_first': 0,
@@ -228,10 +221,6 @@ def eval_semcor(paras):
         # 'total': 0,
     # }
 
-
-    rank_list = []
-    n_words = 0
-    n_senses = 0
     for para in paras:
         sentences = []
         indices = []
@@ -239,20 +228,24 @@ def eval_semcor(paras):
             sent = []
             w_idx = 0
             for w_group_idx, word in enumerate(sentence):
-                if word['true_sense'] is None:
+                if word['true_senses'] is None:
                     # Don't need to disambiguate this word
                     pass
-                elif isinstance(word['true_sense'], str):
-                    # Should be disambiguated, but we couldn't find it's lemma
-                    # in wordnet
-                    log.warn("No lemma found for %s", word)
-                    count_skipped += 1
                 else:
+                    valid_senses = []
+                    for sense in word['true_senses']:
+                        if isinstance(sense, str):
+                            # Should be disambiguated, but we couldn't find
+                            # it's lemma in wordnet
+                            log.warn("No lemma found for %s", word)
+                            stats['total_skipped'] += 1
+                        else:
+                            valid_senses.append(sense)
                     # Disambiguate this
                     indices.append({'s_idx': s_idx,
                                     'w_idx': w_idx,
                                     'w_group_idx': w_group_idx,
-                                    'sense': word['true_sense'],
+                                    'senses': valid_senses,
                                     'lemma': word['lemma'],
                                     'pos': word['pos']})
                 sent.extend(word['words'])
@@ -261,9 +254,6 @@ def eval_semcor(paras):
         sentences = tuple(sentences)
         orig_sentences  = sentences
         for word in indices:
-            n_senses += len(wordnet.synsets(word['lemma'], word['pos']))
-            n_words += 1
-
             sense_output = dict()
             sense_output['baseline_first'] = baseline.first_sense(
                 word['lemma'], word['pos'])
@@ -289,7 +279,7 @@ def eval_semcor(paras):
                 embed_func=sif_embeds,
                 distance_func=scipy.spatial.distance.sqeuclidean)
 
-            true_sense = word['sense'].synset()
+            true_senses = [sense.synset() for sense in word['senses']]
             clustered_senses = cluster_wordnet.cluster(
                 wordnet.synsets(word['lemma'], word['pos']))
             stats['total'] += 1
@@ -298,17 +288,18 @@ def eval_semcor(paras):
                     log.warn('No result for %s', method)
                     continue
                 predicted_sense = result[0][0]
-                if true_sense == predicted_sense:
+                if predicted_sense in true_senses:
                     stats[method] += 1
                 for cluster in clustered_senses:
-                    if true_sense in cluster and predicted_sense in cluster:
+                    if (any(x in cluster for x in true_senses) and
+                            predicted_sense in cluster):
                         stats['same_cluster_' + method] += 1
                         break
 
 
             pprint.pprint([detok_sent(sent) for sent in orig_sentences])
             pprint.pprint(word)
-            print("Correct sense:", true_sense.definition())
+            print("Correct senses:", [x.definition() for x in true_senses])
 
             print("Predicted:")
             pprint.pprint(sense_output)
@@ -316,6 +307,7 @@ def eval_semcor(paras):
             print("*" * 80)
 
     pprint.pprint(stats)
+    return stats
 
 
 
@@ -339,10 +331,20 @@ if __name__ == '__main__':
         sent_list = replace_target_word(sentences[index[0]], index[1])
         orig_sent = sentences[index[0]]
 
-    if True:
+    if False:
         semcor_file = './data/datasets/semcor3.0/brownv/tagfiles/br-r01'
         with open(semcor_file, 'rb') as f:
             paras = semcor_reader.read_semcor(f)
 
         eval_semcor(paras)
 
+    if True:
+        combined_stats = defaultdict(int)
+        brown_dir = './data/datasets/semcor3.0/brownv/tagfiles'
+        for f in os.listdir(brown_dir):
+            with open(os.path.join(brown_dir, f), 'rb') as f:
+                paras = semcor_reader.read_semcor(f)
+            stats = eval_semcor(paras)
+            for k, v in stats.items():
+                combined_stats[k] += v
+        pprint.pprint(combined_stats)
