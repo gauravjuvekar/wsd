@@ -241,13 +241,14 @@ def eval_semcor(paras, stats=None):
                             stats['total_skipped'] += 1
                         else:
                             valid_senses.append(sense)
-                    # Disambiguate this
-                    indices.append({'s_idx': s_idx,
-                                    'w_idx': w_idx,
-                                    'w_group_idx': w_group_idx,
-                                    'senses': valid_senses,
-                                    'lemma': word['lemma'],
-                                    'pos': word['pos']})
+                    if valid_senses:
+                        # Disambiguate this
+                        indices.append({'s_idx': s_idx,
+                                        'w_idx': w_idx,
+                                        'w_group_idx': w_group_idx,
+                                        'senses': valid_senses,
+                                        'lemma': word['lemma'],
+                                        'pos': word['pos']})
                 sent.extend(word['words'])
                 w_idx += len(word['words'])
             sentences.append(tuple(sent))
