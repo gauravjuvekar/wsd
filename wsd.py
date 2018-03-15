@@ -152,6 +152,43 @@ def choose_sense(sentences, target_word, embed_func, distance_func):
         for synset, dist in sorted(synset_dist.items(), key=lambda x:x[1])]
 
 
+def choose_sense_multiply_dist(
+        sentences, target_word, embed_func, distance_func):
+    replacements = list(
+        get_replacements(
+            sentences[target_word['s_idx']],
+            target_word['w_idx'],
+            target_word['lemma'],
+            target_word['pos']))
+
+    average_dist = []
+    s_idx = target_word['s_idx']
+    synset_dist = defaultdict(set)
+
+    for new_sent, synset in replacements:
+        replaced_para = sentences[:s_idx] + new_sent + sentences[s_idx + 1:]
+        embeds = embed_func(replaced_para)
+        replaced_embed = embeds[s_idx]
+        pairwise_dist = [distance_func(replaced_embed, context_embed)
+                         for context_embed in embeds
+                         if context_embed is not replaced_embed]
+        # distance with itself will be 0
+        product = functools.reduce(lambda x, y: x * y, pairwise_dist)
+        average_dist.append(product)
+        synset_dist[synset].add(product)
+
+    # for synset, dist_set in synset_dist.items():
+        # synset_dist[synset] = sum(dist_set) / len(dist_set)
+
+    for synset, dist_set in synset_dist.items():
+        synset_dist[synset] = min(dist_set)
+
+    return [
+        (synset, {'dist': dist})
+        for synset, dist in sorted(synset_dist.items(), key=lambda x:x[1])]
+
+
+
 def choose_sense_nocontext_double_sort(
         sentences, target_word, embed_func, distance_func):
     replacements = list(
@@ -202,7 +239,7 @@ def choose_sense_definition(
     return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
 
 
-def eval_semcor(paras, stats=None):
+def eval_semcor(paras, embed_func, stats=None):
     if stats is None:
         stats = defaultdict(int)
     # {
@@ -266,18 +303,23 @@ def eval_semcor(paras, stats=None):
                 choose_sense_nocontext_double_sort(
                     sentences,
                     target_word=word,
-                    embed_func=sif_embeds,
+                    embed_func=embed_func,
                     distance_func=scipy.spatial.distance.sqeuclidean))
             sense_output['context_sentences'] = (
                 choose_sense(
                     sentences,
                     target_word=word,
-                    embed_func=sif_embeds,
+                    embed_func=embed_func,
                     distance_func=scipy.spatial.distance.cosine))
+            sense_output['multiply_dist'] = choose_sense_multiply_dist(
+                    sentences,
+                    target_word=word,
+                    embed_func=embed_func,
+                    distance_func=scipy.spatial.distance.cosine)
             sense_output['definition'] = choose_sense_definition(
                 sentences,
                 target_word=word,
-                embed_func=sif_embeds,
+                embed_func=embed_func,
                 distance_func=scipy.spatial.distance.sqeuclidean)
 
             true_senses = [sense.synset() for sense in word['senses']]
@@ -339,7 +381,7 @@ if __name__ == '__main__':
 
         eval_semcor(paras)
 
-    if False:
+    if True:
         combined_stats = defaultdict(int)
         brown_dir = './data/datasets/semcor3.0/brownv/tagfiles'
         count = 0
@@ -348,12 +390,12 @@ if __name__ == '__main__':
             if count > 3: break
             with open(os.path.join(brown_dir, f), 'rb') as f:
                 paras = semcor_reader.read_semcor(f)
-            stats = eval_semcor(paras)
+            stats = eval_semcor(paras, embed_func=sif_embeds)
             for k, v in stats.items():
                 combined_stats[k] += v
         pprint.pprint(combined_stats)
 
-    if True:
+    if False:
         brownv_dir = './data/datasets/semcor3.0/brownv/tagfiles'
         brown1_dir = './data/datasets/semcor3.0/brown1/tagfiles'
         brown2_dir = './data/datasets/semcor3.0/brown2/tagfiles'
