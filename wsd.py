@@ -339,13 +339,58 @@ if __name__ == '__main__':
 
         eval_semcor(paras)
 
-    if True:
+    if False:
         combined_stats = defaultdict(int)
         brown_dir = './data/datasets/semcor3.0/brownv/tagfiles'
+        count = 0
         for f in os.listdir(brown_dir):
+            count += 1
+            if count > 3: break
             with open(os.path.join(brown_dir, f), 'rb') as f:
                 paras = semcor_reader.read_semcor(f)
             stats = eval_semcor(paras)
             for k, v in stats.items():
                 combined_stats[k] += v
         pprint.pprint(combined_stats)
+
+    if True:
+        brownv_dir = './data/datasets/semcor3.0/brownv/tagfiles'
+        brown1_dir = './data/datasets/semcor3.0/brown1/tagfiles'
+        brown2_dir = './data/datasets/semcor3.0/brown2/tagfiles'
+        stats = {
+            'pos': defaultdict(int),
+            'senses': defaultdict(int),
+            'total_skipped': 0,
+            'total_count': 0
+            }
+        file_count = 0
+        for d in (brown1_dir, brown2_dir, brownv_dir):
+            for f in os.listdir(d):
+                file_count += 1
+                print(file_count, d, f)
+
+                with open(os.path.join(d, f), 'rb') as f:
+                    paras = semcor_reader.read_semcor(f)
+
+                for para in paras:
+                    for sentence in para:
+                        for word in sentence:
+                            if word['true_senses'] is None:
+                                # Don't need to disambiguate this word
+                                pass
+                            else:
+                                stats['total_count'] += 1
+                                pos = word['pos']
+                                stats['pos'][pos] += 1
+                                for sense in word['true_senses']:
+                                    if isinstance(sense, str):
+                                        # Should be disambiguated, but we
+                                        # couldn't find it's lemma in wordnet
+                                        log.warn("No lemma found for %s", word)
+                                        stats['total_skipped'] += 1
+                                    else:
+                                        stats['senses'][sense.key()] += 1
+        import pickle
+        with open('semcor_stats.pickle', 'wb') as f:
+            pickle.dump(stats, f)
+        pprint.pprint(stats)
