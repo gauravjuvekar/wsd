@@ -426,7 +426,7 @@ if __name__ == '__main__':
 
     if True:
         combined_stats = defaultdict(int)
-        brown_dir = './data/datasets/semcor3.0/brownv/tagfiles'
+        brown_dir = './data/datasets/semcor3.0/brown1/tagfiles'
         count = 0
         for f in os.listdir(brown_dir):
             count += 1
