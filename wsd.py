@@ -84,12 +84,12 @@ def underscore_tokenize(sentence):
             ])
 
 
-def get_replacements(tok_sent, index, lemma, pos=None):
+def get_replacements(tok_sent, index, synsets, lemma, pos=None):
     # given a sentence represented as a list of tokens, and the index of the
     # token to be replaced (i.e the token to be disambiguated), return list of
     # sentences with hypernym replaced for each sense of target token word
     lemset = set()
-    for synset in wordnet.synsets(lemma, pos=pos):
+    for synset in synsets:
         hypernyms = synset.hypernyms()
         hyponyms = synset.hyponyms()
         if not hypernyms:
@@ -118,13 +118,14 @@ def get_replacements(tok_sent, index, lemma, pos=None):
 
 
 
-def choose_sense(sentences, target_word, embed_func, distance_func):
+def choose_sense(sentences, target_word, senses, embed_func, distance_func):
     replacements = list(
         get_replacements(
             sentences[target_word['s_idx']],
             target_word['w_idx'],
-            target_word['lemma'],
-            target_word['pos']))
+            synsets=senses,
+            lemma=target_word['lemma'],
+            pos=target_word['pos']))
 
     average_dist = []
     s_idx = target_word['s_idx']
@@ -153,13 +154,14 @@ def choose_sense(sentences, target_word, embed_func, distance_func):
 
 
 def choose_sense_multiply_dist(
-        sentences, target_word, embed_func, distance_func):
+        sentences, target_word, senses, embed_func, distance_func):
     replacements = list(
         get_replacements(
             sentences[target_word['s_idx']],
             target_word['w_idx'],
-            target_word['lemma'],
-            target_word['pos']))
+            synsets=senses,
+            lemma=target_word['lemma'],
+            pos=target_word['pos']))
 
     average_dist = []
     s_idx = target_word['s_idx']
@@ -190,13 +192,14 @@ def choose_sense_multiply_dist(
 
 
 def choose_sense_nocontext_double_sort(
-        sentences, target_word, embed_func, distance_func):
+        sentences, target_word, senses, embed_func, distance_func):
     replacements = list(
         get_replacements(
             sentences[target_word['s_idx']],
             target_word['w_idx'],
-            target_word['lemma'],
-            target_word['pos']))
+            synsets=senses,
+            lemma=target_word['lemma'],
+            pos=target_word['pos']))
 
     s_idx = target_word['s_idx']
     dist = []
@@ -224,10 +227,10 @@ def choose_sense_nocontext_double_sort(
 
 
 def choose_sense_definition(
-        sentences, target_word, embed_func, distance_func):
+        sentences, target_word, senses, embed_func, distance_func):
     orig_sent = sentences[target_word['s_idx']]
     synset_dist = defaultdict(list)
-    for synset in wordnet.synsets(target_word['lemma'], target_word['pos']):
+    for synset in senses:
         definition = underscore_tokenize(synset.definition())
         embeds = embed_func((orig_sent, definition))
         distance = distance_func(embeds[0], embeds[1])
@@ -258,7 +261,8 @@ def eval_semcor(paras, embed_func, stats=None):
         # 'total': 0,
     # }
 
-    for para in paras:
+    for para_idx, para in enumerate(paras):
+        log.info("Para: %d", para_idx)
         sentences = []
         indices = []
         for s_idx, sentence in enumerate(para):
@@ -292,39 +296,42 @@ def eval_semcor(paras, embed_func, stats=None):
         sentences = tuple(sentences)
         orig_sentences  = sentences
         for word in indices:
+            synsets = wordnet.synsets(word['lemma'], word['pos'])
             sense_output = dict()
-            sense_output['baseline_first'] = baseline.first_sense(
-                word['lemma'], word['pos'])
-            sense_output['baseline_random'] = baseline.random_sense(
-                word['lemma'], word['pos'])
+
+            sense_output['baseline_first'] = baseline.choose_first(synsets)
+            sense_output['baseline_random'] = baseline.choose_random(synsets)
             sense_output['baseline_most_frequent'] = (
-                baseline.max_lemma_count_sense(word['lemma'], word['pos']))
+                baseline.choose_max_lemma_count(synsets))
             sense_output['nocontext_double_sort'] = (
                 choose_sense_nocontext_double_sort(
                     sentences,
                     target_word=word,
+                    senses=synsets,
                     embed_func=embed_func,
                     distance_func=scipy.spatial.distance.sqeuclidean))
             sense_output['context_sentences'] = (
                 choose_sense(
                     sentences,
                     target_word=word,
+                    senses=synsets,
                     embed_func=embed_func,
                     distance_func=scipy.spatial.distance.cosine))
             sense_output['multiply_dist'] = choose_sense_multiply_dist(
                     sentences,
                     target_word=word,
+                    senses=synsets,
                     embed_func=embed_func,
                     distance_func=scipy.spatial.distance.cosine)
             sense_output['definition'] = choose_sense_definition(
                 sentences,
                 target_word=word,
+                senses=synsets,
                 embed_func=embed_func,
                 distance_func=scipy.spatial.distance.sqeuclidean)
 
             true_senses = [sense.synset() for sense in word['senses']]
-            clustered_senses = cluster_wordnet.cluster(
-                wordnet.synsets(word['lemma'], word['pos']))
+            clustered_senses = cluster_wordnet.cluster(synsets)
             stats['total'] += 1
             for method, result in sense_output.items():
                 if not result:
@@ -350,6 +357,7 @@ def eval_semcor(paras, embed_func, stats=None):
             print("*" * 80)
 
     pprint.pprint(stats)
+    print("*" * 80)
     return stats
 
 
