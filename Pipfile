@@ -15,6 +15,7 @@ sklearn = "*"
 "bs4" = "*"
 nltk = "*"
 pywsd = "*"
+cachetools = "*"
 
 
 [dev-packages]

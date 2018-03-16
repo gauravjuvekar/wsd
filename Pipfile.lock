@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "e610c350bebede83b9f49dd44d5878e4297fc10f0a376ec2fd3df566235a3b5f"
+            "sha256": "313fe434250e5773370416bfa062ba4c9d488614c8470661f47dc1460457f8d9"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -29,6 +29,13 @@
                 "sha256:36ecea1fd7cc5c0c6e4a1ff075df26d50da647b75376626cc186e2212886dd3a"
             ],
             "version": "==0.0.1"
+        },
+        "cachetools": {
+            "hashes": [
+                "sha256:4319bbb78172e7bcf99423e1ecd6914b32336ccfe97d2058ffe62e641a7f3abe",
+                "sha256:ede01f2d3cbd6ddc9e35e16c2b0ce011d8bb70ce0dbaf282f5b4df24b213bc5d"
+            ],
+            "version": "==2.0.1"
         },
         "cython": {
             "hashes": [
