@@ -387,7 +387,7 @@ if __name__ == '__main__':
         count = 0
         for f in os.listdir(brown_dir):
             count += 1
-            if count > 3: break
+            if count > 1: break
             with open(os.path.join(brown_dir, f), 'rb') as f:
                 paras = semcor_reader.read_semcor(f)
             stats = eval_semcor(paras, embed_func=sif_embeds)
