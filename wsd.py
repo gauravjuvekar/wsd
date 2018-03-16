@@ -14,6 +14,8 @@ import nltk
 import nltk.tokenize
 import nltk.tokenize.moses
 
+import pickle
+
 import pywsd
 
 import functools
@@ -28,7 +30,7 @@ import os
 import logging
 logging.basicConfig()
 log = logging.getLogger(__name__)
-log.setLevel(logging.WARNING)
+log.setLevel(logging.INFO)
 
 
 wordnet = nltk.wordnet.wordnet
@@ -242,6 +244,33 @@ def choose_sense_definition(
     return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
 
 
+with open('semcor_stats.pickle', 'rb') as f:
+    corpus_stats = pickle.load(f)
+    corpus_total_lemma_count = sum(corpus_stats['senses'].values())
+    for k, v in list(corpus_stats['senses'].items()):
+        k2 = wordnet.lemma_from_key(k).synset()
+        corpus_stats['senses'][k2] = corpus_stats['senses'][k]
+        del corpus_stats['senses'][k]
+
+
+def choose_sense_weighted(
+        sentences, target_word, senses, embed_func, distance_func):
+    unweighted = choose_sense(
+        sentences, target_word, senses, embed_func, distance_func)
+    sum_1_dist = 0
+    for synset, v in unweighted:
+        sum_1_dist += v['dist']
+
+    sum_1_dist = 1 / sum_1_dist
+    for synset, v in unweighted:
+        v['probability'] = (1 / v['dist']) / sum_1_dist
+        v['weighted'] = v['probability'] * (corpus_stats['senses'][synset] /
+                                            corpus_total_lemma_count)
+    return list(sorted(unweighted,
+                       key=lambda x: x[1]['weighted'],
+                       reverse=True))
+
+
 def eval_semcor(paras, embed_func, stats=None):
     if stats is None:
         stats = defaultdict(int)
@@ -324,6 +353,12 @@ def eval_semcor(paras, embed_func, stats=None):
                     embed_func=embed_func,
                     distance_func=scipy.spatial.distance.cosine)
             sense_output['definition'] = choose_sense_definition(
+                sentences,
+                target_word=word,
+                senses=synsets,
+                embed_func=embed_func,
+                distance_func=scipy.spatial.distance.sqeuclidean)
+            sense_output['weighted'] = choose_sense_weighted(
                 sentences,
                 target_word=word,
                 senses=synsets,
