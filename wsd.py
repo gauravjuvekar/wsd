@@ -41,6 +41,8 @@ ENABLE = (
     # 's2v',
     )
 
+PREFETCH = True
+
 sif_db = SIF.data_io.setup_db('./data/sif.db')
 s2v_model = sent2vec.Sent2vecModel()
 
@@ -129,6 +131,9 @@ def choose_sense(sentences, target_word, senses, embed_func, distance_func):
             lemma=target_word['lemma'],
             pos=target_word['pos']))
 
+    if PREFETCH:
+        embed_func(tuple(sent for sent, _ in replacements))
+
     average_dist = []
     s_idx = target_word['s_idx']
     synset_dist = defaultdict(set)
@@ -164,6 +169,9 @@ def choose_sense_multiply_dist(
             synsets=senses,
             lemma=target_word['lemma'],
             pos=target_word['pos']))
+
+    if PREFETCH:
+        embed_func(tuple(sent for sent, _ in replacements))
 
     average_dist = []
     s_idx = target_word['s_idx']
@@ -202,6 +210,9 @@ def choose_sense_nocontext_double_sort(
             synsets=senses,
             lemma=target_word['lemma'],
             pos=target_word['pos']))
+
+    if PREFETCH:
+        embed_func(tuple(sent for sent, _ in replacements))
 
     s_idx = target_word['s_idx']
     dist = []
