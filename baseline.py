@@ -1,19 +1,19 @@
 #!/usr/bin/env python
-import pywsd
+# import pywsd
 import nltk
 import random
 
 wn = nltk.wordnet.wordnet
 wn.ensure_loaded()
 
-def first_sense(lemma, pos):
-    return [(pywsd.baseline.first_sense(lemma, pos),)]
+# def first_sense(lemma, pos):
+    # return [(pywsd.baseline.first_sense(lemma, pos),)]
 
 def choose_first(senses, *args, **kwargs):
     return [(senses[0],)]
 
-def random_sense(lemma, pos):
-    return [(pywsd.baseline.random_sense(lemma, pos),)]
+# def random_sense(lemma, pos):
+    # return [(pywsd.baseline.random_sense(lemma, pos),)]
 
 def choose_random(senses, *args, **kwargs):
     senses = [(sense,) for sense in senses]

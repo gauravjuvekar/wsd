@@ -16,7 +16,7 @@ import nltk.tokenize.moses
 
 import pickle
 
-import pywsd
+# import pywsd
 
 import functools
 import statistics
