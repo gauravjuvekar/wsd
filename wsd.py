@@ -532,18 +532,27 @@ def eval_semcor(paras, embed_func, stats=None):
 
             true_senses = [sense.synset() for sense in word['senses']]
             clustered_senses = cluster_wordnet.cluster(synsets)
+            pos = word['pos']
+
             stats['total'] += 1
+            stats['total_pos_' + pos] += 1
+
             for method, result in sense_output.items():
                 if not result:
                     log.warn('No result for %s', method)
+                    stats['no_result'] += 1
+                    stats['no_result_pos_' + pos] += 1
                     continue
+
                 predicted_sense = result[0][0]
                 if predicted_sense in true_senses:
                     stats[method] += 1
+                    stats[method + '_pos_' + pos] += 1
                 for cluster in clustered_senses:
                     if (any(x in cluster for x in true_senses) and
                             predicted_sense in cluster):
                         stats['same_cluster_' + method] += 1
+                        stats['same_cluster_' + method + '_pos_' + pos] += 1
                         break
 
 
