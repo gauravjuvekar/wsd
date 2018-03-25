@@ -97,9 +97,9 @@ def get_replacements(tok_sent, index, synsets, lemma, pos=None):
         hypernyms = synset.hypernyms()
         hyponyms = synset.hyponyms()
         if not hypernyms:
-            log.info("Synset %s has no hypernyms", synset)
+            log.debug("Synset %s has no hypernyms", synset)
         if not hyponyms:
-            log.info("Synset %s has no hyponyms", synset)
+            log.debug("Synset %s has no hyponyms", synset)
         if not hypernyms and not hyponyms:
             elem_list = underscore_tokenize(synset.definition())
             new_sent = tok_sent[:index] + elem_list + tok_sent[index + 1:]
