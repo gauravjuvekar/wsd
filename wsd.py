@@ -255,6 +255,127 @@ def choose_sense_definition(
     return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
 
 
+def choose_sense_examples(
+        sentences, target_word, senses, embed_func, distance_func):
+    orig_sent = sentences[target_word['s_idx']]
+
+    synset_dist = defaultdict(list)
+    for synset in senses:
+        examples = synset.examples()
+        if not len(examples):
+            log.debug("Synset %s has no examples", synset)
+            continue
+        else:
+            for example in examples:
+                example = underscore_tokenize(example)
+                embeds = embed_func((orig_sent, example))
+                distance = distance_func(embeds[0], embeds[1])
+                append_dict = {'dist': distance, 'embedding': embeds[1]}
+                synset_dist[synset].append(append_dict)
+
+    for synset, dist in synset_dist.items():
+        synset_dist[synset] = min(dist, key=lambda x: x['dist'])
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
+
+
+def choose_sense_5word_definition(
+        sentences, target_word, senses, embed_func, distance_func):
+    flat = [word for sentence in sentences for word in sentence]
+    target_idx = (sum(len(s) for s in sentences[:target_word['s_idx']]) +
+                  target_word['w_idx'])
+    low_idx = max(0, target_idx - 2)
+    orig_context = flat[low_idx:low_idx + 5 + target_word['w_group_len'] - 1]
+
+    synset_dist = defaultdict(list)
+    for synset in senses:
+        definition = underscore_tokenize(synset.definition())
+        embeds = embed_func((orig_context, definition))
+        distance = distance_func(embeds[0], embeds[1])
+        append_dict = {'dist': distance, 'embedding': embeds[1]}
+        synset_dist[synset].append(append_dict)
+
+    for synset, dist in synset_dist.items():
+        synset_dist[synset] = min(dist, key=lambda x: x['dist'])
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
+
+
+def choose_sense_7word_definition(
+        sentences, target_word, senses, embed_func, distance_func):
+    flat = [word for sentence in sentences for word in sentence]
+    target_idx = (sum(len(s) for s in sentences[:target_word['s_idx']]) +
+                  target_word['w_idx'])
+    low_idx = max(0, target_idx - 2)
+    orig_context = flat[low_idx:low_idx + 7 + target_word['w_group_len'] - 1]
+
+    synset_dist = defaultdict(list)
+    for synset in senses:
+        definition = underscore_tokenize(synset.definition())
+        embeds = embed_func((orig_context, definition))
+        distance = distance_func(embeds[0], embeds[1])
+        append_dict = {'dist': distance, 'embedding': embeds[1]}
+        synset_dist[synset].append(append_dict)
+
+    for synset, dist in synset_dist.items():
+        synset_dist[synset] = min(dist, key=lambda x: x['dist'])
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
+
+
+def choose_sense_5word_examples(
+        sentences, target_word, senses, embed_func, distance_func):
+    flat = [word for sentence in sentences for word in sentence]
+    target_idx = (sum(len(s) for s in sentences[:target_word['s_idx']]) +
+                  target_word['w_idx'])
+    low_idx = max(0, target_idx - 2)
+    orig_context = flat[low_idx:low_idx + 5 + target_word['w_group_len'] - 1]
+
+    synset_dist = defaultdict(list)
+    for synset in senses:
+        examples = synset.examples()
+        if not len(examples):
+            log.warn("Synset %s has no examples", synset)
+            continue
+        else:
+            for example in examples:
+                example = underscore_tokenize(example)
+                embeds = embed_func((orig_context, example))
+                distance = distance_func(embeds[0], embeds[1])
+                append_dict = {'dist': distance, 'embedding': embeds[1]}
+                synset_dist[synset].append(append_dict)
+
+    for synset, dist in synset_dist.items():
+        synset_dist[synset] = min(dist, key=lambda x: x['dist'])
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
+
+
+
+def choose_sense_7word_examples(
+        sentences, target_word, senses, embed_func, distance_func):
+    flat = [word for sentence in sentences for word in sentence]
+    target_idx = (sum(len(s) for s in sentences[:target_word['s_idx']]) +
+                  target_word['w_idx'])
+    low_idx = max(0, target_idx - 2)
+    orig_context = flat[low_idx:low_idx + 7 + target_word['w_group_len'] - 1]
+
+    synset_dist = defaultdict(list)
+    for synset in senses:
+        examples = synset.examples()
+        if not len(examples):
+            log.warn("Synset %s has no examples", synset)
+            continue
+        else:
+            for example in examples:
+                example = underscore_tokenize(example)
+                embeds = embed_func((orig_context, example))
+                distance = distance_func(embeds[0], embeds[1])
+                append_dict = {'dist': distance, 'embedding': embeds[1]}
+                synset_dist[synset].append(append_dict)
+
+    for synset, dist in synset_dist.items():
+        synset_dist[synset] = min(dist, key=lambda x: x['dist'])
+    return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
+
+
+
 with open('semcor_stats.pickle', 'rb') as f:
     corpus_stats = pickle.load(f)
     corpus_total_lemma_count = sum(corpus_stats['senses'].values())
@@ -327,6 +448,7 @@ def eval_semcor(paras, embed_func, stats=None):
                         indices.append({'s_idx': s_idx,
                                         'w_idx': w_idx,
                                         'w_group_idx': w_group_idx,
+                                        'w_group_len': len(word['words']),
                                         'senses': valid_senses,
                                         'lemma': word['lemma'],
                                         'pos': word['pos']})
@@ -349,15 +471,15 @@ def eval_semcor(paras, embed_func, stats=None):
                     target_word=word,
                     senses=synsets,
                     embed_func=embed_func,
-                    distance_func=scipy.spatial.distance.sqeuclidean))
+                    distance_func=scipy.spatial.distance.euclidean))
             sense_output['context_sentences'] = (
                 choose_sense(
                     sentences,
                     target_word=word,
                     senses=synsets,
                     embed_func=embed_func,
-                    distance_func=scipy.spatial.distance.cosine))
-            sense_output['multiply_dist'] = choose_sense_multiply_dist(
+                    distance_func=scipy.spatial.distance.euclidean))
+            sense_output['multiply_dist_cosine'] = choose_sense_multiply_dist(
                     sentences,
                     target_word=word,
                     senses=synsets,
@@ -368,7 +490,37 @@ def eval_semcor(paras, embed_func, stats=None):
                 target_word=word,
                 senses=synsets,
                 embed_func=embed_func,
-                distance_func=scipy.spatial.distance.sqeuclidean)
+                distance_func=scipy.spatial.distance.euclidean)
+            sense_output['examples'] = choose_sense_examples(
+                sentences,
+                target_word=word,
+                senses=synsets,
+                embed_func=embed_func,
+                distance_func=scipy.spatial.distance.euclidean)
+            sense_output['7word_examples'] = choose_sense_7word_examples(
+                sentences,
+                target_word=word,
+                senses=synsets,
+                embed_func=embed_func,
+                distance_func=scipy.spatial.distance.euclidean)
+            sense_output['5word_examples'] = choose_sense_5word_examples(
+                sentences,
+                target_word=word,
+                senses=synsets,
+                embed_func=embed_func,
+                distance_func=scipy.spatial.distance.euclidean)
+            sense_output['5word_definition'] = choose_sense_5word_definition(
+                sentences,
+                target_word=word,
+                senses=synsets,
+                embed_func=embed_func,
+                distance_func=scipy.spatial.distance.euclidean)
+            sense_output['7word_definition'] = choose_sense_7word_definition(
+                sentences,
+                target_word=word,
+                senses=synsets,
+                embed_func=embed_func,
+                distance_func=scipy.spatial.distance.euclidean)
             sense_output['weighted'] = choose_sense_weighted(
                 sentences,
                 target_word=word,
