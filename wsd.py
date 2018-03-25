@@ -65,7 +65,7 @@ def sif_embeds(sent_list):
 @functools.lru_cache()
 def detok_sent(sent):
     detokenizer = nltk.tokenize.moses.MosesDetokenizer()
-    return tuple(detokenizer.detokenize(sent, return_str=True))
+    return detokenizer.detokenize(sent, return_str=True)
 
 # @functools.lru_cache()
 # def detok_sent(sent):
@@ -78,7 +78,7 @@ def s2v_embed_wrapped(sent):
 
 
 def s2v_embeds(sents):
-    return [s2v_embed_wrapped(detok_sent(sent)) for sent in sents]
+    return [s2v_embed_wrapped(detok_sent(tuple(sent))) for sent in sents]
 
 
 def underscore_tokenize(sentence):
