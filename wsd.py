@@ -65,7 +65,7 @@ def sif_embeds(sent_list):
 @functools.lru_cache()
 def detok_sent(sent):
     detokenizer = nltk.tokenize.moses.MosesDetokenizer()
-    return detokenizer.detokenize(sent, return_str=True)
+    return tuple(detokenizer.detokenize(sent, return_str=True))
 
 # @functools.lru_cache()
 # def detok_sent(sent):
