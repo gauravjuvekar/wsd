@@ -457,7 +457,9 @@ def eval_semcor(paras, embed_func, stats=None):
             sentences.append(tuple(sent))
         sentences = tuple(sentences)
         orig_sentences  = sentences
-        for word in indices:
+        for disambiguate_idx, word in enumerate(indices):
+            log.info("Para: %d, disambiguate_idx: %d/%d",
+                     para_idx, disambiguate_idx, len(indices))
             synsets = wordnet.synsets(word['lemma'], word['pos'])
             sense_output = dict()
 
