@@ -603,7 +603,7 @@ if __name__ == '__main__':
     if False:
         semcor_file = './data/datasets/semcor3.0/brownv/tagfiles/br-r01'
         with open(semcor_file, 'rb') as f:
-            paras = semcor_reader.read_semcor(f)
+            paras = semcor_reader.semcor_reader.read_semcor(f)
 
         pprint.pprint(list(eval_semcor(paras)))
 
@@ -615,7 +615,7 @@ if __name__ == '__main__':
             count += 1
             if count > 1: break
             with open(os.path.join(brown_dir, f), 'rb') as f:
-                paras = semcor_reader.read_semcor(f)
+                paras = semcor_reader.semcor_reader.read_semcor(f)
             stats = reduce_stats(eval_semcor(paras, embed_func=sif_embeds))
             for k, v in stats.items():
                 combined_stats[k] += v
@@ -638,7 +638,7 @@ if __name__ == '__main__':
                 print(file_count, d, f)
 
                 with open(os.path.join(d, f), 'rb') as f:
-                    paras = semcor_reader.read_semcor(f)
+                    paras = semcor_reader.semcor_reade.read_semcor(f)
 
                 for para in paras:
                     for sentence in para:
