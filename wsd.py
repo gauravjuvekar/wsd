@@ -640,7 +640,7 @@ def output_file_semeval15_13(outputs):
 
             predicted_key = predicted_lemma.key()
             if method not in file_handles:
-                file_handles[method] = open(method + '.txt', 'w')
+                file_handles[method] = open('semeval15_13_' + method + '.txt', 'w')
 
             print(d['word']['id'], d['word']['id'], predicted_key,
                   sep='\t',
