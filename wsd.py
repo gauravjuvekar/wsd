@@ -642,7 +642,7 @@ def output_file_semeval15_13(outputs):
             if method not in file_handles:
                 file_handles[method] = open('semeval15_13_' + method + '.txt', 'w')
 
-            print(d['word']['id'], d['word']['id'], predicted_key,
+            print(d['word']['id'], d['word']['id'], 'wn:' + predicted_key,
                   sep='\t',
                   file=file_handles[method])
             pprint.pprint(d['word'])
