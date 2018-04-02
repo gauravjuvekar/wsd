@@ -403,7 +403,79 @@ def choose_sense_weighted(
                        reverse=True))
 
 
-def eval_semcor(paras, embed_func, stats=None):
+def get_sense_outputs(sentences, synsets, target_word, embed_func):
+    sense_output = dict()
+
+    sense_output['baseline_first'] = baseline.choose_first(synsets)
+    sense_output['baseline_random'] = baseline.choose_random(synsets)
+    sense_output['baseline_most_frequent'] = (
+        baseline.choose_max_lemma_count(synsets))
+    sense_output['nocontext_double_sort'] = (
+        choose_sense_nocontext_double_sort(
+            sentences,
+            target_word=target_word,
+            senses=synsets,
+            embed_func=embed_func,
+            distance_func=scipy.spatial.distance.euclidean))
+    sense_output['context_sentences'] = (
+        choose_sense(
+            sentences,
+            target_word=target_word,
+            senses=synsets,
+            embed_func=embed_func,
+            distance_func=scipy.spatial.distance.euclidean))
+    sense_output['multiply_dist_cosine'] = choose_sense_multiply_dist(
+            sentences,
+            target_word=target_word,
+            senses=synsets,
+            embed_func=embed_func,
+            distance_func=scipy.spatial.distance.cosine)
+    sense_output['definition'] = choose_sense_definition(
+        sentences,
+        target_word=target_word,
+        senses=synsets,
+        embed_func=embed_func,
+        distance_func=scipy.spatial.distance.euclidean)
+    sense_output['examples'] = choose_sense_examples(
+        sentences,
+        target_word=target_word,
+        senses=synsets,
+        embed_func=embed_func,
+        distance_func=scipy.spatial.distance.euclidean)
+    sense_output['7word_examples'] = choose_sense_7word_examples(
+        sentences,
+        target_word=target_word,
+        senses=synsets,
+        embed_func=embed_func,
+        distance_func=scipy.spatial.distance.euclidean)
+    sense_output['5word_examples'] = choose_sense_5word_examples(
+        sentences,
+        target_word=target_word,
+        senses=synsets,
+        embed_func=embed_func,
+        distance_func=scipy.spatial.distance.euclidean)
+    sense_output['5word_definition'] = choose_sense_5word_definition(
+        sentences,
+        target_word=target_word,
+        senses=synsets,
+        embed_func=embed_func,
+        distance_func=scipy.spatial.distance.euclidean)
+    sense_output['7word_definition'] = choose_sense_7word_definition(
+        sentences,
+        target_word=target_word,
+        senses=synsets,
+        embed_func=embed_func,
+        distance_func=scipy.spatial.distance.euclidean)
+    sense_output['weighted'] = choose_sense_weighted(
+        sentences,
+        target_word=target_word,
+        senses=synsets,
+        embed_func=embed_func,
+        distance_func=scipy.spatial.distance.sqeuclidean)
+    return sense_output
+
+
+def reduce_stats(iterator, stats=None):
     if stats is None:
         stats = defaultdict(int)
     # {
@@ -422,6 +494,39 @@ def eval_semcor(paras, embed_func, stats=None):
         # 'total': 0,
     # }
 
+    for d in iterator:
+        pprint.pprint(d)
+        true_senses = [sense.synset() for sense in d['word']['senses']]
+        clustered_senses = cluster_wordnet.cluster(d['synsets'])
+        pos = d['word']['pos']
+
+        stats['total'] += 1
+        stats['total_pos_' + pos] += 1
+
+        for method, result in d['outputs'].items():
+            if not result:
+                log.warn('No result for %s', method)
+                stats['no_result'] += 1
+                stats['no_result_pos_' + pos] += 1
+                continue
+
+            predicted_sense = result[0][0]
+            if predicted_sense in true_senses:
+                stats[method] += 1
+                stats[method + '_pos_' + pos] += 1
+            for cluster in clustered_senses:
+                if (any(x in cluster for x in true_senses) and
+                        predicted_sense in cluster):
+                    stats['same_cluster_' + method] += 1
+                    stats['same_cluster_' + method + '_pos_' + pos] += 1
+                    break
+        print("*" * 80)
+    return stats
+
+
+def eval_semcor(paras, embed_func, stats=None):
+    if stats is None:
+        stats = defaultdict(int)
     for para_idx, para in enumerate(paras):
         log.info("Para: %d", para_idx)
         sentences = []
@@ -430,10 +535,7 @@ def eval_semcor(paras, embed_func, stats=None):
             sent = []
             w_idx = 0
             for w_group_idx, word in enumerate(sentence):
-                if word['true_senses'] is None:
-                    # Don't need to disambiguate this word
-                    pass
-                else:
+                if word['disambiguate?']:
                     valid_senses = []
                     for sense in word['true_senses']:
                         if isinstance(sense, str):
@@ -445,129 +547,36 @@ def eval_semcor(paras, embed_func, stats=None):
                             valid_senses.append(sense)
                     if valid_senses:
                         # Disambiguate this
-                        indices.append({'s_idx': s_idx,
-                                        'w_idx': w_idx,
-                                        'w_group_idx': w_group_idx,
-                                        'w_group_len': len(word['words']),
-                                        'senses': valid_senses,
-                                        'lemma': word['lemma'],
-                                        'pos': word['pos']})
+                        word['s_idx'] = s_idx
+                        word['w_idx'] = w_idx
+                        word['w_group_idx'] = w_group_idx
+                        word['w_group_len'] = len(word['words'])
+                        word['senses'] = valid_senses
+                        indices.append(word)
                 sent.extend(word['words'])
                 w_idx += len(word['words'])
             sentences.append(tuple(sent))
+
         sentences = tuple(sentences)
         orig_sentences  = sentences
         for disambiguate_idx, word in enumerate(indices):
             log.info("Para: %d, disambiguate_idx: %d/%d",
                      para_idx, disambiguate_idx, len(indices))
             synsets = wordnet.synsets(word['lemma'], word['pos'])
-            sense_output = dict()
 
-            sense_output['baseline_first'] = baseline.choose_first(synsets)
-            sense_output['baseline_random'] = baseline.choose_random(synsets)
-            sense_output['baseline_most_frequent'] = (
-                baseline.choose_max_lemma_count(synsets))
-            sense_output['nocontext_double_sort'] = (
-                choose_sense_nocontext_double_sort(
-                    sentences,
-                    target_word=word,
-                    senses=synsets,
-                    embed_func=embed_func,
-                    distance_func=scipy.spatial.distance.euclidean))
-            sense_output['context_sentences'] = (
-                choose_sense(
-                    sentences,
-                    target_word=word,
-                    senses=synsets,
-                    embed_func=embed_func,
-                    distance_func=scipy.spatial.distance.euclidean))
-            sense_output['multiply_dist_cosine'] = choose_sense_multiply_dist(
-                    sentences,
-                    target_word=word,
-                    senses=synsets,
-                    embed_func=embed_func,
-                    distance_func=scipy.spatial.distance.cosine)
-            sense_output['definition'] = choose_sense_definition(
-                sentences,
+            sense_output = get_sense_outputs(
+                sentences=sentences,
                 target_word=word,
-                senses=synsets,
-                embed_func=embed_func,
-                distance_func=scipy.spatial.distance.euclidean)
-            sense_output['examples'] = choose_sense_examples(
-                sentences,
-                target_word=word,
-                senses=synsets,
-                embed_func=embed_func,
-                distance_func=scipy.spatial.distance.euclidean)
-            sense_output['7word_examples'] = choose_sense_7word_examples(
-                sentences,
-                target_word=word,
-                senses=synsets,
-                embed_func=embed_func,
-                distance_func=scipy.spatial.distance.euclidean)
-            sense_output['5word_examples'] = choose_sense_5word_examples(
-                sentences,
-                target_word=word,
-                senses=synsets,
-                embed_func=embed_func,
-                distance_func=scipy.spatial.distance.euclidean)
-            sense_output['5word_definition'] = choose_sense_5word_definition(
-                sentences,
-                target_word=word,
-                senses=synsets,
-                embed_func=embed_func,
-                distance_func=scipy.spatial.distance.euclidean)
-            sense_output['7word_definition'] = choose_sense_7word_definition(
-                sentences,
-                target_word=word,
-                senses=synsets,
-                embed_func=embed_func,
-                distance_func=scipy.spatial.distance.euclidean)
-            sense_output['weighted'] = choose_sense_weighted(
-                sentences,
-                target_word=word,
-                senses=synsets,
-                embed_func=embed_func,
-                distance_func=scipy.spatial.distance.sqeuclidean)
-
-            true_senses = [sense.synset() for sense in word['senses']]
-            clustered_senses = cluster_wordnet.cluster(synsets)
-            pos = word['pos']
-
-            stats['total'] += 1
-            stats['total_pos_' + pos] += 1
-
-            for method, result in sense_output.items():
-                if not result:
-                    log.warn('No result for %s', method)
-                    stats['no_result'] += 1
-                    stats['no_result_pos_' + pos] += 1
-                    continue
-
-                predicted_sense = result[0][0]
-                if predicted_sense in true_senses:
-                    stats[method] += 1
-                    stats[method + '_pos_' + pos] += 1
-                for cluster in clustered_senses:
-                    if (any(x in cluster for x in true_senses) and
-                            predicted_sense in cluster):
-                        stats['same_cluster_' + method] += 1
-                        stats['same_cluster_' + method + '_pos_' + pos] += 1
-                        break
-
+                synsets=synsets,
+                embed_func=embed_func)
 
             pprint.pprint([detok_sent(sent) for sent in orig_sentences])
             pprint.pprint(word)
-            print("Correct senses:", [x.definition() for x in true_senses])
-
-            print("Predicted:")
-            pprint.pprint(sense_output)
-
-            print("*" * 80)
-
-    pprint.pprint(stats)
-    print("*" * 80)
-    return stats
+            yield {
+                'word': word,
+                'synsets': synsets,
+                'outputs': sense_output
+                }
 
 
 
@@ -596,7 +605,7 @@ if __name__ == '__main__':
         with open(semcor_file, 'rb') as f:
             paras = semcor_reader.read_semcor(f)
 
-        eval_semcor(paras)
+        pprint.pprint(list(eval_semcor(paras)))
 
     if True:
         combined_stats = defaultdict(int)
@@ -607,7 +616,7 @@ if __name__ == '__main__':
             if count > 1: break
             with open(os.path.join(brown_dir, f), 'rb') as f:
                 paras = semcor_reader.read_semcor(f)
-            stats = eval_semcor(paras, embed_func=sif_embeds)
+            stats = reduce_stats(eval_semcor(paras, embed_func=sif_embeds))
             for k, v in stats.items():
                 combined_stats[k] += v
         pprint.pprint(combined_stats)
