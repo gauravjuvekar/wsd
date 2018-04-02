@@ -579,6 +579,77 @@ def eval_semcor(paras, embed_func, stats=None):
                 }
 
 
+def eval_semeval15_13(paras, embed_func, stats=None):
+    for para_idx, para in enumerate(paras):
+        log.info("Para: %d", para_idx)
+        sentences = []
+        indices = []
+        for s_idx, sentence in enumerate(para):
+            sent = []
+            w_idx = 0
+            for w_group_idx, word in enumerate(sentence):
+                if word['disambiguate?']:
+                    # Disambiguate this
+                    word['s_idx'] = s_idx
+                    word['w_idx'] = w_idx
+                    word['w_group_idx'] = w_group_idx
+                    word['w_group_len'] = len(word['words'])
+                    indices.append(word)
+                sent.extend(word['words'])
+                w_idx += len(word['words'])
+            sentences.append(tuple(sent))
+
+        sentences = tuple(sentences)
+        orig_sentences  = sentences
+        for disambiguate_idx, word in enumerate(indices):
+            log.info("Para: %d, disambiguate_idx: %d/%d",
+                     para_idx, disambiguate_idx, len(indices))
+            synsets = wordnet.synsets(word['lemma'], word['pos'])
+            if not synsets:
+                log.info("No synsets for %s", word['lemma'])
+                continue
+
+            sense_output = get_sense_outputs(
+                sentences=sentences,
+                target_word=word,
+                synsets=synsets,
+                embed_func=embed_func)
+
+            pprint.pprint([detok_sent(sent) for sent in orig_sentences])
+            pprint.pprint(word)
+            yield {
+                'word': word,
+                'synsets': synsets,
+                'outputs': sense_output
+                }
+
+def output_file_semeval15_13(outputs):
+    file_handles = dict()
+    for d in outputs:
+        for method, result in d['outputs'].items():
+            if not result:
+                log.warn('No result for %s', method)
+                continue
+            predicted_sense = result[0][0]
+            for lemma in predicted_sense.lemmas():
+                if lemma.name == d['word']['lemma']:
+                    predicted_lemma = lemma
+                    break
+            else:
+                predicted_lemma = predicted_sense.lemmas()[0]
+
+            predicted_key = predicted_lemma.key()
+            if method not in file_handles:
+                file_handles[method] = open(method + '.txt', 'w')
+
+            print(d['word']['id'], d['word']['id'], predicted_key,
+                  sep='\t',
+                  file=file_handles[method])
+            pprint.pprint(d['word'])
+
+    for f in file_handles.values():
+        f.close()
+
 
 if __name__ == '__main__':
     import pprint
@@ -607,7 +678,7 @@ if __name__ == '__main__':
 
         pprint.pprint(list(eval_semcor(paras)))
 
-    if True:
+    if False:
         combined_stats = defaultdict(int)
         brown_dir = './data/datasets/semcor3.0/brown1/tagfiles'
         count = 0
@@ -620,6 +691,14 @@ if __name__ == '__main__':
             for k, v in stats.items():
                 combined_stats[k] += v
         pprint.pprint(combined_stats)
+
+    if True:
+        combined_stats = defaultdict(int)
+        semeval = './data/datasets/semeval15/data/semeval-2015-task-13-en.xml'
+        with open(semeval, 'r') as f:
+            paras = semcor_reader.semeval_reader.read_semeval15_13(f)
+        ev = eval_semeval15_13(paras, embed_func=sif_embeds)
+        output_file_semeval15_13(ev)
 
     if False:
         brownv_dir = './data/datasets/semcor3.0/brownv/tagfiles'
