@@ -404,7 +404,7 @@ if not os.path.exists(semcor_stats):
             print(file_count, d, f)
 
             with open(os.path.join(d, f), 'rb') as f:
-                paras = semcor_reader.semcor_reade.read_semcor(f)
+                paras = semcor_reader.semcor_reader.read_semcor(f)
 
             for para in paras:
                 for sentence in para:
