@@ -45,9 +45,10 @@ PREFETCH = True
 
 sif_db = SIF.data_io.setup_db('./data/sif.db')
 s2v_model = sent2vec.Sent2vecModel()
+semcor_stats = './data/semcor_stats.pickle'
 
 if 's2v' in ENABLE:
-    s2v_model.load_model('./data/s2v_wiki_unigrams.bin')
+    s2v_model.load_model('./data/sent2vec_wiki_unigrams.bin')
 
 
 def sif_embeds(sent_list):
@@ -60,6 +61,16 @@ def sif_embeds(sent_list):
                                                 params)
     return list(embedding)
 
+
+def sif_embeds_nopcr(sent_list):
+    idx_mat, weight_mat, data = SIF.data_io.prepare_data(sent_list, sif_db)
+    params = SIF.params.params()
+    params.rmpc = 0
+    embedding = SIF.SIF_embedding.SIF_embedding(idx_mat,
+                                                weight_mat,
+                                                data,
+                                                params)
+    return list(embedding)
 
 
 @functools.lru_cache()
@@ -375,8 +386,50 @@ def choose_sense_7word_examples(
     return list(sorted(synset_dist.items(), key=lambda x:x[1]['dist']))
 
 
+import pickle
+if not os.path.exists(semcor_stats):
+    brownv_dir = './data/semcor3.0/brownv/tagfiles'
+    brown1_dir = './data/semcor3.0/brown1/tagfiles'
+    brown2_dir = './data/semcor3.0/brown2/tagfiles'
+    stats = {
+        'pos': defaultdict(int),
+        'senses': defaultdict(int),
+        'total_skipped': 0,
+        'total_count': 0
+        }
+    file_count = 0
+    for d in (brown1_dir, brown2_dir, brownv_dir):
+        for f in os.listdir(d):
+            file_count += 1
+            print(file_count, d, f)
 
-with open('semcor_stats.pickle', 'rb') as f:
+            with open(os.path.join(d, f), 'rb') as f:
+                paras = semcor_reader.semcor_reade.read_semcor(f)
+
+            for para in paras:
+                for sentence in para:
+                    for word in sentence:
+                        if word['true_senses'] is None:
+                            # Don't need to disambiguate this word
+                            pass
+                        else:
+                            stats['total_count'] += 1
+                            pos = word['pos']
+                            stats['pos'][pos] += 1
+                            for sense in word['true_senses']:
+                                if isinstance(sense, str):
+                                    # Should be disambiguated, but we
+                                    # couldn't find it's lemma in wordnet
+                                    log.warn("No lemma found for %s", word)
+                                    stats['total_skipped'] += 1
+                                else:
+                                    stats['senses'][sense.key()] += 1
+    with open(semcor_stats, 'wb') as f:
+        pickle.dump(stats, f)
+    pprint.pprint(stats)
+
+
+with open(semcor_stats, 'rb') as f:
     corpus_stats = pickle.load(f)
     corpus_total_lemma_count = sum(corpus_stats['senses'].values())
     for k, v in list(corpus_stats['senses'].items()):
@@ -672,7 +725,7 @@ if __name__ == '__main__':
         orig_sent = sentences[index[0]]
 
     if False:
-        semcor_file = './data/datasets/semcor3.0/brownv/tagfiles/br-r01'
+        semcor_file = './data/semcor3.0/brownv/tagfiles/br-r01'
         with open(semcor_file, 'rb') as f:
             paras = semcor_reader.semcor_reader.read_semcor(f)
 
@@ -680,7 +733,7 @@ if __name__ == '__main__':
 
     if False:
         combined_stats = defaultdict(int)
-        brown_dir = './data/datasets/semcor3.0/brown1/tagfiles'
+        brown_dir = './data/semcor3.0/brown1/tagfiles'
         count = 0
         for f in os.listdir(brown_dir):
             count += 1
@@ -694,50 +747,8 @@ if __name__ == '__main__':
 
     if True:
         combined_stats = defaultdict(int)
-        semeval = './data/datasets/semeval15/data/semeval-2015-task-13-en.xml'
+        semeval = './data/SemEval-2015-task-13-v1.0/data/semeval-2015-task-13-en.xml'
         with open(semeval, 'r') as f:
             paras = semcor_reader.semeval_reader.read_semeval15_13(f)
         ev = eval_semeval15_13(paras, embed_func=sif_embeds)
         output_file_semeval15_13(ev)
-
-    if False:
-        brownv_dir = './data/datasets/semcor3.0/brownv/tagfiles'
-        brown1_dir = './data/datasets/semcor3.0/brown1/tagfiles'
-        brown2_dir = './data/datasets/semcor3.0/brown2/tagfiles'
-        stats = {
-            'pos': defaultdict(int),
-            'senses': defaultdict(int),
-            'total_skipped': 0,
-            'total_count': 0
-            }
-        file_count = 0
-        for d in (brown1_dir, brown2_dir, brownv_dir):
-            for f in os.listdir(d):
-                file_count += 1
-                print(file_count, d, f)
-
-                with open(os.path.join(d, f), 'rb') as f:
-                    paras = semcor_reader.semcor_reade.read_semcor(f)
-
-                for para in paras:
-                    for sentence in para:
-                        for word in sentence:
-                            if word['true_senses'] is None:
-                                # Don't need to disambiguate this word
-                                pass
-                            else:
-                                stats['total_count'] += 1
-                                pos = word['pos']
-                                stats['pos'][pos] += 1
-                                for sense in word['true_senses']:
-                                    if isinstance(sense, str):
-                                        # Should be disambiguated, but we
-                                        # couldn't find it's lemma in wordnet
-                                        log.warn("No lemma found for %s", word)
-                                        stats['total_skipped'] += 1
-                                    else:
-                                        stats['senses'][sense.key()] += 1
-        import pickle
-        with open('semcor_stats.pickle', 'wb') as f:
-            pickle.dump(stats, f)
-        pprint.pprint(stats)
