@@ -15,6 +15,7 @@ import nltk.tokenize
 import nltk.tokenize.moses
 
 import pickle
+import pprint
 
 # import pywsd
 
@@ -678,6 +679,7 @@ def eval_semeval15_13(paras, embed_func, stats=None):
 
 def output_file_semeval15_13(outputs):
     file_handles = dict()
+    os.makedirs('output', exist_ok=True)
     for d in outputs:
         for method, result in d['outputs'].items():
             if not result:
@@ -693,7 +695,7 @@ def output_file_semeval15_13(outputs):
 
             predicted_key = predicted_lemma.key()
             if method not in file_handles:
-                file_handles[method] = open('semeval15_13_' + method + '.txt', 'w')
+                file_handles[method] = open('output/semeval15_13_' + method + '.txt', 'w')
 
             print(d['word']['id'], d['word']['id'], 'wn:' + predicted_key,
                   sep='\t',
